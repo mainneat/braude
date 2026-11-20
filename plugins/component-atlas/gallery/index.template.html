@@ -186,7 +186,7 @@ h1, h2, h3, p { margin: 0; }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 12px;
   align-items: start;
 }
@@ -208,7 +208,7 @@ h1, h2, h3, p { margin: 0; }
 .specimen:hover { border-color: var(--line-strong); }
 .specimen:focus-visible { outline-offset: 1px; border-radius: var(--radius); }
 /* L'hôte du shadow root : le cadre est ici, l'apparence (fond, police) vient du CSS de l'artifact. */
-.tile { display: block; max-height: 220px; overflow: hidden; min-width: 0; }
+.tile { display: block; max-height: 240px; overflow: hidden; min-width: 0; }
 .specimen-cap {
   display: flex;
   flex-direction: column;
@@ -236,7 +236,7 @@ h1, h2, h3, p { margin: 0; }
 .state, .empty { padding: 48px 0; max-width: 560px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .state-title { font-size: 16px; font-weight: 600; }
 .state-error .state-title { color: var(--err); }
-.skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 12px; width: 100%; max-width: none; }
+.skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; width: 100%; max-width: none; }
 .state-loading { max-width: none; }
 .skeleton span { height: 150px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); animation: pulse 1.4s ease-in-out infinite alternate; }
 .skeleton span:nth-child(2n) { animation-delay: 0.2s; }

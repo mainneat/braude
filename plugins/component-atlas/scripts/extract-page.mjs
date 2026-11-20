@@ -9,8 +9,11 @@ import { launch } from './lib/browser.mjs';
 import { serializeScoped } from './lib/css.mjs';
 import { toHex } from './lib/color.mjs';
 import { componentKey } from './lib/hash.mjs';
+import { moduleToScript } from './lib/inline.mjs';
 
 const DETECT_SRC = readFileSync(new URL('./browser/detect.js', import.meta.url), 'utf8');
+// Même code de rendu que les tuiles de la galerie.
+const TILE_SRC = moduleToScript(readFileSync(new URL('../gallery/src/tile.mjs', import.meta.url), 'utf8'));
 const VIEWPORT = { width: 1280, height: 900 };
 const CONTACT_MAX_HEIGHT = 6000;
 const RAW_LIMIT_MIN = 3000; // éléments détectés avant dédoublonnage (garde-fou mémoire)
@@ -44,8 +47,7 @@ export async function extractPage(htmlPath, opts = {}) {
 // Statut 'error' seulement quand rien ne se rend (fichier absent, chargement en échec sans DOM,
 // navigateur ou détection en échec). Erreurs JS, ressources injoignables, délais avec DOM
 // utilisable → 'ok' + warnings.
-// opts.contactPath (interne au CLI) : capture de la page avec les candidats numérotés.
-export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 20000, browser, contactPath, wholeBody = false, badgeOffset = 0, keepRules = false } = {}) {
+export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 20000, browser, wholeBody = false, keepRules = false } = {}) {
   const warnings = [];
   const note = (msg) => { if (!warnings.includes(msg)) warnings.push(msg); };
   const ok = (styles, candidates) => ({ status: 'ok', warnings, styles, candidates });
@@ -112,19 +114,6 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
 
     if (missing) note(`Thème sombre : ${missing} élément(s) introuvable(s) après le changement de thème, mesures claires reprises`);
 
-    if (contactPath) {
-      try {
-        await page.emulateMedia({ colorScheme: 'light' });
-        await run(settle, undefined, 'Stabilisation');
-        await run((pairs) => window.__caBadges(pairs), kept.map((g, i) => [g.raw, i + badgeOffset]), 'Badges');
-        const height = await run(() => document.documentElement.scrollHeight, undefined, 'Hauteur');
-        await page.screenshot({ path: contactPath, fullPage: true, timeout: timeoutMs,
-          ...(height > CONTACT_MAX_HEIGHT ? { clip: { x: 0, y: 0, width: VIEWPORT.width, height: CONTACT_MAX_HEIGHT } } : {}) });
-      } catch (e) {
-        note(`Planche-contact : ${firstLine(e.message)}`);
-      }
-    }
-
     const { css, fontFaceCss } = serializeScoped(raw.rules);
     const cssLight = serializeScoped(raw.rules, { scheme: 'light' }).css;
     const cssDark = serializeScoped(raw.rules, { scheme: 'dark' }).css;
@@ -144,18 +133,89 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
   }
 }
 
+const SHEET_CSS = `body{margin:0;padding:16px;background:#f4f4f2;font:12px/1.4 ui-monospace,Menlo,monospace;color:#222}
+#sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(296px,1fr));gap:12px;align-items:start}
+figure{margin:0;border:1px solid #c9c9c4;background:#fff;min-width:0}
+figcaption{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #c9c9c4;overflow:hidden;white-space:nowrap}
+figcaption b{flex:none;min-width:22px;height:20px;padding:0 5px;border-radius:10px;background:#e5484d;color:#fff;font-weight:700;text-align:center;line-height:20px}
+figcaption span{overflow:hidden;text-overflow:ellipsis;color:#666}
+.tile{display:block;max-height:320px;overflow:hidden}`;
+
+/**
+ * Planche-contact : chaque candidat rendu comme une tuile de la galerie (Shadow DOM + CSS scopé clair),
+ * avec un badge numéroté = candidate.index. Capture PNG pleine page (coupée à 6000 px).
+ * styles = { cssLight, cssDark?, css?, fontFaceCss?, fontLinks? } de l'artifact.
+ */
+export async function renderContactSheet(candidates, styles, outPath, browser, { timeoutMs = 20000 } = {}) {
+  const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: 'light' });
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(timeoutMs);
+    await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${SHEET_CSS}</style></head>`
+      + `<body><div id="sheet"></div></body></html>`);
+    await page.addScriptTag({ content: `(() => {\n${TILE_SRC}\nwindow.__caMount = mountSnippet;\n})();` });
+    const items = candidates.map((c) => ({ index: c.index, html: c.html,
+      label: [c.presetName, c.measureOnly ? 'mesure' : null, c.tag, c.text].filter(Boolean).join(' · ').slice(0, 80) }));
+    await withTimeout(page.evaluate(({ items, styles }) => {
+      const sheet = document.getElementById('sheet');
+      for (const it of items) {
+        const fig = document.createElement('figure');
+        const cap = document.createElement('figcaption');
+        const num = document.createElement('b');
+        num.textContent = String(it.index);
+        const lab = document.createElement('span');
+        lab.textContent = it.label;
+        cap.append(num, lab);
+        const host = document.createElement('div');
+        host.className = 'tile';
+        fig.append(cap, host);
+        sheet.append(fig);
+        window.__caMount(host, { html: it.html, styles, theme: 'light' });
+      }
+      const links = [...document.head.querySelectorAll('link[rel=stylesheet]')]
+        .map((l) => new Promise((r) => { l.addEventListener('load', r); l.addEventListener('error', r); }));
+      return Promise.race([Promise.all(links), new Promise((r) => setTimeout(r, 5000))])
+        .then(() => document.fonts.ready).then(() => true);
+    }, { items, styles: styles || {} }), timeoutMs, 'Planche-contact');
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.screenshot({ path: outPath, fullPage: true, timeout: timeoutMs,
+      ...(height > CONTACT_MAX_HEIGHT ? { clip: { x: 0, y: 0, width: VIEWPORT.width, height: CONTACT_MAX_HEIGHT } } : {}) });
+  } finally {
+    await withTimeout(context.close(), 5000, 'Fermeture').catch(() => {});
+  }
+}
+
+/** Écrit candidates.json, styles.json, contact.png et extract.json dans `dir` (CLI page et design system). */
+export async function writeRawOutputs(dir, r, browser) {
+  if (r.candidates.length) {
+    try { await renderContactSheet(r.candidates, r.styles, join(dir, 'contact.png'), browser); } catch (e) {
+      r.warnings.push(`Planche-contact : ${firstLine(e.message)}`);
+    }
+  }
+  await writeFile(join(dir, 'candidates.json'), JSON.stringify(r.candidates, null, 1));
+  await writeFile(join(dir, 'styles.json'), JSON.stringify(r.styles));
+  const summary = { status: r.status, ...(r.error ? { error: r.error } : {}), warnings: r.warnings, candidates: r.candidates.length };
+  await writeFile(join(dir, 'extract.json'), JSON.stringify(summary, null, 2));
+  process.stdout.write(JSON.stringify(summary) + '\n');
+}
+
 async function main(argv) {
   const dir = argv[0];
   if (!dir) {
     process.stderr.write('Usage : node scripts/extract-page.mjs <rawDir>\n');
     process.exit(2);
   }
-  const r = await extractPage(join(dir, 'index.html'), { contactPath: join(dir, 'contact.png') });
-  await writeFile(join(dir, 'candidates.json'), JSON.stringify(r.candidates, null, 1));
-  await writeFile(join(dir, 'styles.json'), JSON.stringify(r.styles));
-  const summary = { status: r.status, ...(r.error ? { error: r.error } : {}), warnings: r.warnings, candidates: r.candidates.length };
-  await writeFile(join(dir, 'extract.json'), JSON.stringify(summary, null, 2));
-  process.stdout.write(JSON.stringify(summary) + '\n');
+  let browser;
+  try {
+    browser = await launch();
+  } catch (e) {
+    await writeRawOutputs(dir, { status: 'error', error: firstLine(e.message), warnings: [], styles: emptyStyles(), candidates: [] }, null);
+    return;
+  }
+  try {
+    const r = await extractPage(join(dir, 'index.html'), { browser });
+    await writeRawOutputs(dir, r, browser);
+  } finally { await browser.close().catch(() => {}); }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

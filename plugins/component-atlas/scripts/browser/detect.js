@@ -1,5 +1,5 @@
 // Injecté dans la page source (page.evaluate) : détection des composants, coquille
-// d'ancêtres, mesures et arbre CSS. Expose window.__caDetect, __caMeasure, __caBadges.
+// d'ancêtres, mesures et arbre CSS. Expose window.__caDetect et __caMeasure.
 // Aucun attribut n'est posé sur les éléments de la page : les éléments retenus sont
 // gardés en mémoire (avec un chemin CSS de repli si le JS de la page les remplace).
 (() => {
@@ -390,26 +390,5 @@
     const e = el.isConnected ? el : document.querySelector(paths[i]);
     return e ? measure(e) : null;
   });
-
-  // Planche-contact provisoire : badges numérotés sur la page source.
-  window.__caBadges = (pairs) => {
-    const layer = document.createElement('div');
-    layer.setAttribute(INTERNAL, '');
-    layer.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
-    for (const [raw, label] of pairs) {
-      const el = els[raw]?.isConnected ? els[raw] : document.querySelector(paths[raw]);
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      const box = document.createElement('div');
-      box.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;`
-        + `height:${r.height}px;outline:2px solid #e5484d;outline-offset:1px;box-sizing:border-box;`;
-      const tag = document.createElement('div');
-      tag.textContent = String(label);
-      tag.style.cssText = 'position:absolute;left:-8px;top:-10px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;'
-        + 'background:#e5484d;color:#fff;font:700 11px/18px system-ui,sans-serif;text-align:center;box-sizing:border-box;';
-      box.appendChild(tag);
-      layer.appendChild(box);
-    }
-    document.documentElement.appendChild(layer);
-  };
 })();
+

@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 // Extraction d'un artifact « Design System » : un candidat 'ds' par composant (aperçu entier)
 // + ses contrôles internes (measureOnly). CLI : node scripts/extract-ds.mjs <rawDir>
-import { readFile, writeFile, readdir, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve, extname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './lib/browser.mjs';
 import { tokensToCss } from './lib/tokens.mjs';
 import { serializeScoped } from './lib/css.mjs';
-import { extractFromHtml } from './extract-page.mjs';
+import { extractFromHtml, writeRawOutputs } from './extract-page.mjs';
 
 const emptyStyles = () => ({ css: '', cssLight: '', cssDark: '', fontFaceCss: '', fontLinks: [] });
 const REACT_VERSION = '18.3.1';
@@ -126,7 +125,7 @@ async function inlinePreview(project, compDir, html, note) {
 function stableKey(r) { return JSON.stringify(r); }
 
 export async function extractDesignSystem(rawDir, opts = {}) {
-  const { browser: shared, timeoutMs, contactPath, maxCandidates } = opts;
+  const { browser: shared, timeoutMs, maxCandidates } = opts;
   const warnings = [];
   const note = (m) => { if (!warnings.includes(m)) warnings.push(m); };
   const fail = (error) => ({ status: 'error', error: String(error).slice(0, 1000), warnings, styles: emptyStyles(), candidates: [] });
@@ -154,12 +153,10 @@ export async function extractDesignSystem(rawDir, opts = {}) {
   if (!jobs.length) return fail('Aucun aperçu de composant (components/<Comp>/preview.html)');
 
   let b = shared;
-  const tmp = await mkdtemp(join(tmpdir(), 'atlas-ds-'));
   const candidates = [];
   const rules = [];
   const seenRules = new Set();
   const fontLinks = [];
-  const shots = [];
   try {
     b ??= await launch();
     for (const name of jobs) {
@@ -168,12 +165,9 @@ export async function extractDesignSystem(rawDir, opts = {}) {
       const { group } = dsCard(raw);
       const body = await inlinePreview(project, dir, raw.replace(/<!--\s*@dsCard\b[^>]*?-->/, ""), note);
       const doc = `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
-      const shot = contactPath ? join(tmp, `${name}.png`) : undefined;
-      const r = await extractFromHtml(doc, { browser: b, timeoutMs, maxCandidates, wholeBody: true, keepRules: true,
-        contactPath: shot, badgeOffset: candidates.length });
+      const r = await extractFromHtml(doc, { browser: b, timeoutMs, maxCandidates, wholeBody: true, keepRules: true });
       for (const w of r.warnings) note(`${name} : ${w}`);
       if (r.status !== 'ok' || !r.candidates.length) { note(`${name} : rendu impossible${r.error ? ` (${r.error})` : ''}`); continue; }
-      if (shot) shots.push({ name, file: shot });
       for (const rule of r.rules ?? []) {
         const k = stableKey(rule);
         if (!seenRules.has(k)) { seenRules.add(k); rules.push(rule); }
@@ -190,9 +184,6 @@ export async function extractDesignSystem(rawDir, opts = {}) {
     }
     if (!candidates.length) return fail('Aucun composant rendu');
 
-    if (contactPath && shots.length) {
-      try { await composeContact(b, shots, contactPath, timeoutMs ?? 20000); } catch (e) { note(`Planche-contact : ${String(e.message).split('\n')[0]}`); }
-    }
     const { css, fontFaceCss } = serializeScoped(rules);
     const cssLight = serializeScoped(rules, { scheme: 'light' }).css;
     const cssDark = serializeScoped(rules, { scheme: 'dark' }).css;
@@ -200,24 +191,8 @@ export async function extractDesignSystem(rawDir, opts = {}) {
   } catch (e) {
     return fail(String(e.message).split('\n')[0]);
   } finally {
-    await rm(tmp, { recursive: true, force: true }).catch(() => {});
     if (b && !shared) await b.close().catch(() => {});
   }
-}
-
-// Planche-contact : une capture par composant (badges numérotés), empilées avec leur nom.
-async function composeContact(browser, shots, out, timeout) {
-  const items = [];
-  for (const s of shots) items.push(`<figure><figcaption>${esc(s.name)}</figcaption><img src="${await dataUri(s.file)}"></figure>`);
-  const html = `<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:16px;background:#fff;font:600 13px system-ui,sans-serif;width:1280px}`
-    + `figure{margin:0 0 16px;border:1px solid #ddd}figcaption{padding:4px 8px;background:#f2f2f4}img{display:block;max-width:100%}</style>${items.join('')}`;
-  const ctx = await browser.newContext({ viewport: { width: 1312, height: 900 } });
-  try {
-    const page = await ctx.newPage();
-    await page.setContent(html, { waitUntil: 'load', timeout });
-    const h = await page.evaluate(() => document.documentElement.scrollHeight);
-    await page.screenshot({ path: out, fullPage: true, timeout, ...(h > 6000 ? { clip: { x: 0, y: 0, width: 1312, height: 6000 } } : {}) });
-  } finally { await ctx.close().catch(() => {}); }
 }
 
 async function main(argv) {
@@ -226,12 +201,11 @@ async function main(argv) {
     process.stderr.write('Usage : node scripts/extract-ds.mjs <rawDir>\n');
     process.exit(2);
   }
-  const r = await extractDesignSystem(dir, { contactPath: join(dir, 'contact.png') });
-  await writeFile(join(dir, 'candidates.json'), JSON.stringify(r.candidates, null, 1));
-  await writeFile(join(dir, 'styles.json'), JSON.stringify(r.styles));
-  const summary = { status: r.status, ...(r.error ? { error: r.error } : {}), warnings: r.warnings, candidates: r.candidates.length };
-  await writeFile(join(dir, 'extract.json'), JSON.stringify(summary, null, 2));
-  process.stdout.write(JSON.stringify(summary) + '\n');
+  const browser = await launch();
+  try {
+    const r = await extractDesignSystem(dir, { browser });
+    await writeRawOutputs(dir, r, browser);
+  } finally { await browser.close().catch(() => {}); }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

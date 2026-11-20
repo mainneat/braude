@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { launch } from '../scripts/lib/browser.mjs';
-import { extractPage } from '../scripts/extract-page.mjs';
+import { extractPage, renderContactSheet } from '../scripts/extract-page.mjs';
 import { toHex } from '../scripts/lib/color.mjs';
 
 const fx = (name) => fileURLToPath(new URL(`./fixtures/pages/${name}`, import.meta.url));
@@ -179,4 +179,18 @@ test('element gone in dark theme: light metrics reused with a warning', async ()
   const b = r.candidates.find((c) => c.tag === 'button');
   assert.deepEqual(b.metrics.dark, b.metrics.light);
   assert.ok(r.warnings.some((w) => /sombre/i.test(w) && /1/.test(w)), JSON.stringify(r.warnings));
+});
+
+test('renderContactSheet renders numbered gallery tiles to a PNG', async () => {
+  const r = await run('basic.html');
+  const dir = mkdtempSync(join(tmpdir(), 'ca-sheet-'));
+  try {
+    const out = join(dir, 'contact.png');
+    await renderContactSheet(r.candidates, r.styles, out, browser);
+    const png = readFileSync(out);
+    assert.equal(png.subarray(1, 4).toString(), 'PNG');
+    assert.equal(png.readUInt32BE(16), 1280, 'width');
+    // Une rangée de tuiles au moins : hauteur > bandeau + tuile.
+    assert.ok(png.readUInt32BE(20) > 100, `height ${png.readUInt32BE(20)}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
