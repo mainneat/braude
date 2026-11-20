@@ -258,3 +258,103 @@ test('shows an error state when data.json is missing', async () => {
     assert.match(await page.textContent('[role="alert"]'), /404/);
   } finally { await close(); }
 });
+
+const KEY_PRIMARY = data.components.find((c) => c.name === 'Bouton principal').key.slice(0, 8);
+
+test('tabs link the four views', async () => {
+  const { page, close } = await open('/');
+  try {
+    await page.waitForSelector('.tile');
+    const tabs = await page.$$eval('#tabs .tab', (as) => as.map((a) => [a.getAttribute('href'), a.textContent]));
+    assert.deepEqual(tabs, [['#types', 'Par type'], ['#matrice', 'Matrice'], ['#couleurs', 'Couleurs'], ['#mesures', 'Mesures']]);
+  } finally { await close(); }
+});
+
+test('matrix cell click filters the by-type view', async () => {
+  const { page, errors, close } = await open('/#matrice');
+  try {
+    const cell = '.mx-cell[data-type="button"][data-project="Nimbus"]';
+    await page.waitForSelector(cell);
+    const nimbusButtons = data.components.filter((c) => c.type === 'button' && c.project === 'Nimbus' && !c.measureOnly).length;
+    assert.equal((await page.textContent(`${cell} .mx-count`)).trim(), String(nimbusButtons), 'count written in the cell');
+    // Le Save d'Atelier est measureOnly : la case button × Atelier ne compte que « Button ».
+    assert.equal((await page.textContent('.mx-cell[data-type="button"][data-project="Atelier"] .mx-count')).trim(), '1');
+    assert.equal(await page.$('.mx-cell[data-type="chip"][data-project="Nimbus"] text'), null, 'empty cell has no count');
+    assert.equal(await page.$eval(cell, (el) => el.getAttribute('tabindex')), '0');
+    await page.click(cell);
+    await page.waitForFunction(() => location.hash === '#types');
+    await page.waitForSelector('.tile');
+    assert.equal(await page.$eval('#f-type', (s) => s.value), 'button');
+    assert.equal(await page.$eval('#f-project', (s) => s.value), 'Nimbus');
+    assert.equal(await page.$$eval('.tile', (t) => t.length), nimbusButtons);
+    // Clavier : Entrée sur une case.
+    // Retour à la matrice : les filtres globaux s'y appliquent aussi.
+    await page.click('#tabs >> text=Matrice');
+    await page.waitForSelector('.mx-cell');
+    assert.deepEqual(await page.$$eval('.mx-cell', (cs) => cs.map((c) => `${c.dataset.type}/${c.dataset.project}`)), ['button/Nimbus']);
+    await page.selectOption('#f-type', '');
+    await page.selectOption('#f-project', '');
+    await page.focus('.mx-cell[data-type="chip"][data-project="Lumen"]');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => location.hash === '#types');
+    assert.equal(await page.$eval('#f-type', (s) => s.value), 'chip');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('swatches: one per distinct color, focus lists the components using it', async () => {
+  const { page, errors, close } = await open('/#couleurs');
+  try {
+    await page.waitForSelector('.sw-dot');
+    const distinct = new Set();
+    for (const c of data.components) for (const k of ['bg', 'fg', 'border']) if (c.metrics.light[k]) distinct.add(c.metrics.light[k].toLowerCase());
+    assert.equal(await page.$$eval('.sw-dot', (d) => d.length), distinct.size);
+    const blue = '.sw-dot[data-hex="#2f6bff"]';
+    assert.equal(await page.$eval(blue, (el) => el.getAttribute('tabindex')), '0');
+    await page.focus(blue);
+    await page.waitForSelector(`.viz-detail a.specimen[href="#c-${KEY_PRIMARY}"] .tile`);
+    const users = data.components.filter((c) => ['bg', 'fg', 'border'].some((k) => c.metrics.light[k] === '#2f6bff')).length;
+    assert.equal(await page.$$eval('.viz-detail .tile', (t) => t.length), users, 'measureOnly users included');
+    assert.match(await page.textContent('.viz-detail'), /#2f6bff/);
+    // Nuancier sombre : les couleurs sombres de nimbTokens02 apparaissent.
+    await page.click('#sw-theme [data-value="dark"]');
+    await page.waitForSelector('.sw-dot[data-hex="#8ab4ff"]');
+    // Un blanc sur fond clair porte un contour.
+    await page.click('#sw-theme [data-value="light"]');
+    assert.match(await page.$eval('.sw-dot[data-hex="#ffffff"] circle.sw-mark', (c) => c.getAttribute('class')), /near-l/);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('metrics: strip plots for the selected type, hover shows previews', async () => {
+  const { page, errors, close } = await open('/#mesures');
+  try {
+    await page.waitForSelector('.strip');
+    assert.equal(await page.$eval('#m-type', (s) => s.value), 'button');
+    const heights = new Set(data.components.filter((c) => c.type === 'button').map((c) => Math.round(c.metrics.light.height)));
+    const strip = page.locator('.strip[data-metric="height"]');
+    assert.match(await strip.textContent(), new RegExp(`${heights.size} valeurs différentes`));
+    assert.equal(await strip.locator('.st-dot').count(), heights.size);
+    await strip.locator('.st-dot[data-value="32"]').hover();
+    await page.waitForSelector(`.viz-detail a.specimen[href="#c-${KEY_PRIMARY}"] .tile`);
+    assert.equal(await page.$$eval('.viz-detail .tile', (t) => t.length),
+      data.components.filter((c) => c.type === 'button' && Math.round(c.metrics.light.height) === 32).length);
+    await page.selectOption('#m-type', 'toggle');
+    await page.waitForSelector('.strip[data-metric="height"]');
+    assert.match(await page.textContent('.strip[data-metric="height"]'), /valeurs? différentes?/);
+    assert.equal(await page.$eval('#m-type', (s) => s.value), 'toggle');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+for (const view of ['matrice', 'couleurs', 'mesures']) {
+  test(`#${view} has no horizontal page scroll at 400px`, async () => {
+    const { page, errors, close } = await open(`/#${view}`, { width: 400, height: 800 });
+    try {
+      await page.waitForSelector('.viz svg');
+      const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
+      assert.ok(sw <= iw, `scrollWidth ${sw} > innerWidth ${iw}`);
+      assert.deepEqual(errors, []);
+    } finally { await close(); }
+  });
+}

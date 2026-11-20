@@ -4,17 +4,25 @@ import { setSnippetTheme } from './tile.mjs';
 import {
   filterComponents, parseRoute, enrichComponents, summarize, sinceFromPeriod, facetOptions, unanalysed, formatDate,
 } from './logic.mjs';
-import { h, plural, renderTypesView, renderDetail, renderUnanalysed, themeSwitch, refitPreviews } from './views.mjs';
+import {
+  h, plural, renderTypesView, renderDetail, renderUnanalysed, themeSwitch, refitPreviews,
+  renderMatrixView, renderColorsView, renderMetricsView,
+} from './views.mjs';
 
-// Vues à onglet. Les vues Matrice, Couleurs et Mesures s'ajoutent ici (Task 8).
+// Vues à onglet. `measureOnly` : la vue reçoit aussi les composants relevés pour mesure seulement.
 const VIEWS = [
   { id: 'types', label: 'Par type', render: renderTypesView },
+  { id: 'matrice', label: 'Matrice', render: renderMatrixView },
+  { id: 'couleurs', label: 'Couleurs', render: renderColorsView, measureOnly: true },
+  { id: 'mesures', label: 'Mesures', render: renderMetricsView, measureOnly: true },
 ];
 
 const app = {
   data: null,
   comps: [],
   byArtifact: new Map(),
+  byKey: new Map(),
+  viewState: {}, // état propre aux vues (thème du nuancier, type mesuré), conservé entre rendus
   filters: { project: '', type: '', q: '', period: 'all' },
   renderTheme: 'auto',
   lastView: 'types',
@@ -33,7 +41,20 @@ function currentFilters() {
 }
 
 function ctx() {
-  return { data: app.data, byArtifact: app.byArtifact, renderTheme: app.renderTheme, clearFilters };
+  return {
+    data: app.data, byArtifact: app.byArtifact, byKey: app.byKey, renderTheme: app.renderTheme, state: app.viewState,
+    clearFilters, goTypes, rerender: render,
+  };
+}
+
+/** Ouvre la vue Par type filtrée sur un type et un projet (clic sur une case de la matrice). */
+function goTypes({ type, project }) {
+  app.filters.type = type;
+  app.filters.project = project;
+  $('f-type').value = type;
+  $('f-project').value = project;
+  if (location.hash === '#types') render();
+  else location.hash = '#types';
 }
 
 function clearFilters() {
@@ -87,6 +108,8 @@ function render() {
   const view = $('view');
   const prev = app.lastView;
   if (prev !== 'detail') app.scroll[prev] = scrollY;
+  // Rendu de la même vue (contrôle propre à la vue) : on garde le défilement et le focus.
+  const focusId = view.contains(document.activeElement) ? document.activeElement.closest('[id]')?.id : null;
   view.replaceChildren();
   view.removeAttribute('aria-busy');
 
@@ -108,13 +131,19 @@ function render() {
     if (tab.dataset.view === def.id) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
-  const comps = filterComponents(app.comps, currentFilters());
+  const filters = currentFilters();
+  const comps = filterComponents(app.comps, filters);
   const total = filterComponents(app.comps, {}).length;
   $('result-count').textContent = comps.length === total ? plural(total, 'composant', 'composants')
     : `${comps.length} sur ${total} composants`;
-  def.render(view, comps, ctx());
+  def.render(view, def.measureOnly ? filterComponents(app.comps, { ...filters, includeMeasureOnly: true }) : comps, ctx());
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => refitPreviews(view));
   if (prev === 'detail') scrollTo(0, app.scroll[def.id] || 0);
+  if (prev === def.id) {
+    scrollTo(0, app.scroll[def.id] || 0);
+    const el = focusId && document.getElementById(focusId);
+    if (el) (el.querySelector('[aria-checked="true"]') || el).focus();
+  }
   app.lastView = def.id;
 }
 
@@ -141,6 +170,7 @@ async function boot() {
   app.data = data;
   app.comps = enrichComponents(data.components || [], data.artifacts || []);
   app.byArtifact = new Map((data.artifacts || []).map((a) => [a.id, a]));
+  app.byKey = new Map(app.comps.map((c) => [c.key, c]));
   setupChrome();
   render();
   addEventListener('hashchange', render);

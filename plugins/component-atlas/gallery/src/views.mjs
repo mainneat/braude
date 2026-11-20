@@ -2,7 +2,9 @@
 // tout passe par `ctx` = { data, byArtifact, renderTheme, ... } fourni par main.mjs.
 // Concaténé dans index.html par build.mjs : noms de premier niveau uniques entre modules.
 import { mountSnippet, setSnippetTheme, pageScheme } from './tile.mjs';
-import { groupByTypeThenProject, typeLabel, formatDate } from './logic.mjs';
+import {
+  groupByTypeThenProject, typeLabel, formatDate, matrixCounts, seqStep, colorPoints, metricSeries, contrastRatio,
+} from './logic.mjs';
 
 /** h('div.a.b', {attr}, ...enfants) : chaînes → nœuds texte, null/false ignorés. */
 export function h(tag, attrs, ...kids) {
@@ -47,7 +49,7 @@ function naturalSize(host, avail) {
   return { w, h: Math.max(1, Math.ceil(root.scrollHeight), Math.ceil(root.getBoundingClientRect().height)) };
 }
 
-function fitPreview(frame, host, mark) {
+function fitPreview(frame, host, mark, maxH = PREVIEW_MAX_H) {
   let lastAvail = -1;
   const fit = (force = true) => {
     const avail = frame.clientWidth;
@@ -56,7 +58,7 @@ function fitPreview(frame, host, mark) {
     host.style.transform = '';
     const size = naturalSize(host, avail);
     if (!size) return;
-    const scale = Math.max(MIN_SCALE, Math.min(1, avail / size.w, PREVIEW_MAX_H / size.h));
+    const scale = Math.max(MIN_SCALE, Math.min(1, avail / size.w, maxH / size.h));
     if (scale < 1) {
       host.style.transform = `scale(${scale})`;
       mark.textContent = `réduit à ${Math.round(scale * 100)} %`;
@@ -64,7 +66,7 @@ function fitPreview(frame, host, mark) {
     } else {
       mark.hidden = true;
     }
-    frame.style.height = `${Math.min(PREVIEW_MAX_H, Math.ceil(size.h * scale))}px`;
+    frame.style.height = `${Math.min(maxH, Math.ceil(size.h * scale))}px`;
   };
   frame.__caFit = fit;
   if (FIT) FIT.observe(frame);
@@ -76,7 +78,7 @@ export function refitPreviews(container) {
   for (const frame of container.querySelectorAll('.preview')) frame.__caFit?.(true);
 }
 
-function specimen(comp, ctx) {
+function specimen(comp, ctx, maxH = PREVIEW_MAX_H) {
   const stage = h('div.tile', { 'data-key': comp.key8, inert: true, 'aria-hidden': 'true' });
   const frame = h('div.preview', null, stage);
   const mark = h('span.scaled', { hidden: true });
@@ -92,7 +94,7 @@ function specimen(comp, ctx) {
         m ? h('span.dim', { text: `${px(m.width)}×${px(m.height)}` }) : null,
         mark)));
   mountTile(stage, comp, ctx, ctx.renderTheme);
-  queueMicrotask(() => fitPreview(frame, stage, mark));
+  queueMicrotask(() => fitPreview(frame, stage, mark, maxH));
   return card;
 }
 
@@ -168,11 +170,11 @@ function metricsTable(metrics) {
     h('tbody', null, rows.map(([k, a, b]) => h('tr', null, h('th', { scope: 'row', text: k }), h('td', null, a), h('td', null, b))))));
 }
 
-export function themeSwitch(id, current, onChange) {
-  const opts = [['auto', 'Auto'], ['light', 'Clair'], ['dark', 'Sombre']];
-  const group = h('div.seg', { role: 'radiogroup', 'aria-label': 'Thème du rendu', id });
-  for (const [value, label] of opts) {
-    const b = h('button.seg-btn', { type: 'button', role: 'radio', 'data-value': value, 'aria-checked': String(value === current), text: label });
+/** Groupe de boutons radio segmentés. `opts` = [[valeur, libellé], …]. */
+function segSwitch(id, label, opts, current, onChange) {
+  const group = h('div.seg', { role: 'radiogroup', 'aria-label': label, id });
+  for (const [value, text] of opts) {
+    const b = h('button.seg-btn', { type: 'button', role: 'radio', 'data-value': value, 'aria-checked': String(value === current), text });
     b.addEventListener('click', () => {
       for (const x of group.children) x.setAttribute('aria-checked', String(x === b));
       onChange(value);
@@ -180,6 +182,10 @@ export function themeSwitch(id, current, onChange) {
     group.append(b);
   }
   return group;
+}
+
+export function themeSwitch(id, current, onChange) {
+  return segSwitch(id, 'Thème du rendu', [['auto', 'Auto'], ['light', 'Clair'], ['dark', 'Sombre']], current, onChange);
 }
 
 export function renderDetail(container, comp, ctx) {
@@ -253,4 +259,312 @@ export function renderUnanalysed(container, artifacts, notes) {
       h('a', { href: a.url, target: '_blank', rel: 'noopener', text: a.title }),
       a.note ? h('span.muted', { text: a.note }) : null))) : null,
     notes.length ? h('div.notes', null, h('h3', { text: 'Remarques' }), h('ul', null, notes.map((n) => h('li', { text: n })))) : null));
+}
+
+// ── Vues de comparaison : Matrice, Couleurs, Mesures (SVG dessiné à la main) ──────────
+// Couleurs des marques et du texte : classes CSS adossées aux tokens --ca-* (clair et sombre).
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const HEX_RE = /^#[0-9a-f]{3,8}$/i;
+const SMALL_PREVIEW_H = 120;
+const SEQ_STEPS = 5;
+// Surfaces de la galerie (--ca-surface clair / sombre) : une pastille trop proche reçoit un contour.
+const SURFACE_LIGHT = '#ffffff';
+const SURFACE_DARK = '#1d1d1b';
+const NEAR_SURFACE = 1.35;
+
+function svg(tag, attrs, ...kids) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'text') el.textContent = v;
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, String(v));
+  }
+  for (const kid of kids.flat()) if (kid) el.append(kid);
+  return el;
+}
+
+/** Largeur de dessin : la place disponible, avec un minimum (le conteneur défile au-delà). */
+const chartWidth = (container, min) => Math.max(min, Math.floor(container.clientWidth || 0));
+// Largeur estimée d'un libellé en 12 px (aucune mesure DOM avant insertion).
+const textW = (s) => String(s).length * 7;
+
+function emptyState(container, ctx) {
+  container.append(h('div.empty', null,
+    h('p', { text: 'Aucun composant ne correspond à ces filtres.' }),
+    h('button.btn', { type: 'button', onclick: ctx.clearFilters, text: 'Effacer les filtres' })));
+}
+
+function vizHead(title, lede, ...extra) {
+  return h('header.viz-head', null,
+    h('div', null, h('h2', { text: title }), h('p.muted', { text: lede })),
+    extra.length ? h('div.viz-controls', null, extra) : null);
+}
+
+/**
+ * Zone sous un graphique : aperçus des composants de la marque survolée ou focalisée.
+ * `group` partage la sélection entre plusieurs zones (une seule remplie à la fois).
+ */
+function detailZone(ctx, hint, group) {
+  const el = h('div.viz-detail', { 'aria-live': 'polite' }, h('p.muted.viz-hint', { text: hint }));
+  let current = null;
+  const zone = {
+    el,
+    show(id, title, keys, mark) {
+      if (current === id) return;
+      if (group) for (const z of group) if (z !== zone) z.clear();
+      current = id;
+      el.closest('.viz-block')?.querySelectorAll('.is-active').forEach((m) => m.classList.remove('is-active'));
+      mark?.classList.add('is-active');
+      const comps = keys.map((k) => ctx.byKey.get(k)).filter(Boolean);
+      el.replaceChildren(
+        h('h3.viz-detail-title', null, title, h('span.count', { text: plural(comps.length, 'composant', 'composants') })),
+        h('div.grid.grid-small', null, comps.map((c) => specimen(c, ctx, SMALL_PREVIEW_H))));
+    },
+    clear() {
+      if (current === null) return;
+      current = null;
+      el.closest('.viz-block')?.querySelectorAll('.is-active').forEach((m) => m.classList.remove('is-active'));
+      el.replaceChildren(h('p.muted.viz-hint', { text: hint }));
+    },
+  };
+  if (group) group.push(zone);
+  return zone;
+}
+
+/** Marque SVG focalisable : survol, focus et clic sélectionnent ; Entrée/Espace aussi. */
+function interactive(mark, label, select) {
+  mark.setAttribute('tabindex', '0');
+  mark.setAttribute('role', 'button');
+  mark.setAttribute('aria-label', label);
+  mark.addEventListener('mouseenter', select);
+  mark.addEventListener('focus', select);
+  mark.addEventListener('click', select);
+  mark.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
+  return mark;
+}
+
+// ── Matrice ──
+
+export function renderMatrixView(container, components, ctx) {
+  const tax = ctx.data.taxonomy;
+  const m = matrixCounts(components, tax);
+  if (!m.rows.length) { emptyState(container, ctx); return; }
+  const labels = m.rows.map((r) => typeLabel(tax, r));
+  const labelW = Math.max(...labels.map(textW)) + 16;
+  const colLen = Math.max(...m.cols.map(textW));
+  const ROT = 40 * Math.PI / 180;
+  const top = Math.ceil(colLen * Math.sin(ROT)) + 18;
+  const avail = Math.floor(container.clientWidth || 0) - labelW - Math.ceil(colLen * Math.cos(ROT)) - 8;
+  const cw = Math.max(44, Math.min(96, Math.floor(avail / m.cols.length)));
+  const ch = 32;
+  const W = labelW + m.cols.length * cw + Math.ceil(colLen * Math.cos(ROT)) + 8;
+  const H = top + m.rows.length * ch + 4;
+
+  const chart = svg('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Matrice type × projet' });
+  m.cols.forEach((p, j) => {
+    const x = labelW + j * cw + cw / 2;
+    chart.append(svg('text', { class: 'ax-label', x, y: top - 8, transform: `rotate(-40 ${x} ${top - 8})`, text: p }));
+  });
+  m.rows.forEach((type, i) => {
+    const y = top + i * ch;
+    chart.append(svg('text', { class: 'ax-label ax-row', x: labelW - 10, y: y + ch / 2, 'text-anchor': 'end', 'dominant-baseline': 'central', text: labels[i] }));
+    m.cols.forEach((project, j) => {
+      const n = m.cells[i][j];
+      const x = labelW + j * cw;
+      const step = seqStep(n, m.max, SEQ_STEPS);
+      const cell = svg('g', { class: n ? 'mx-cell' : 'mx-cell mx-empty', 'data-type': type, 'data-project': project },
+        svg('rect', { class: n ? `mx-rect seq-${step}` : 'mx-rect', x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 3 }));
+      if (n) {
+        const label = `${labels[i]} · ${project} : ${plural(n, 'composant', 'composants')}`;
+        cell.append(svg('title', { text: label }),
+          svg('text', { class: `mx-count seq-ink-${step}`, x: x + cw / 2, y: y + ch / 2, 'text-anchor': 'middle', 'dominant-baseline': 'central', text: String(n) }));
+        cell.setAttribute('tabindex', '0');
+        cell.setAttribute('role', 'link');
+        cell.setAttribute('aria-label', `${label}. Voir ces composants`);
+        const go = () => ctx.goTypes({ type, project });
+        cell.addEventListener('click', go);
+        cell.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
+      chart.append(cell);
+    });
+  });
+
+  const legend = h('div.seq-legend', { 'aria-hidden': 'true' },
+    h('span.muted', { text: '1' }),
+    ...Array.from({ length: SEQ_STEPS }, (_, k) => h(`span.seq-key.seq-bg-${k + 1}`)),
+    h('span.muted', { text: plural(m.max, 'composant', 'composants') }));
+
+  container.append(h('section.viz-block', null,
+    vizHead('Matrice', 'Nombre de composants par type et par projet. Une case mène à ces composants dans la vue Par type.', legend),
+    h('div.viz', null, chart)));
+}
+
+// ── Couleurs (nuancier) ──
+
+const HUE_TICKS = [[0, 'rouge'], [60, 'jaune'], [120, 'vert'], [180, 'cyan'], [240, 'bleu'], [300, 'magenta'], [360, 'rouge']];
+const NEUTRAL_S = 0.1;
+
+function swatchClasses(hex) {
+  const cls = ['sw-mark'];
+  if (contrastRatio(hex, SURFACE_LIGHT) < NEAR_SURFACE) cls.push('near-l');
+  if (contrastRatio(hex, SURFACE_DARK) < NEAR_SURFACE) cls.push('near-d');
+  return cls.join(' ');
+}
+
+export function renderColorsView(container, components, ctx) {
+  const st = ctx.state;
+  if (!st.swTheme) st.swTheme = pageScheme();
+  const points = colorPoints(components, st.swTheme).filter((p) => HEX_RE.test(p.hex));
+  const toggle = segSwitch('sw-theme', 'Thème des couleurs', [['light', 'Clair'], ['dark', 'Sombre']], st.swTheme,
+    (v) => { st.swTheme = v; ctx.rerender(); });
+  const head = vizHead('Couleurs',
+    'Chaque pastille est une couleur de fond, de texte ou de bordure ; sa taille suit le nombre de composants qui l’utilisent.', toggle);
+  if (!points.length) {
+    container.append(h('section.viz-block', null, head, h('p.muted.viz-hint', { text: 'Aucune couleur relevée pour ces composants.' })));
+    return;
+  }
+
+  const W = chartWidth(container, 560);
+  const H = 360;
+  const M = { l: 44, r: 16, t: 14, b: 40 };
+  const band = 56; // colonne des neutres (saturation faible : teinte sans signification)
+  const hx0 = M.l + band + 16;
+  const hx1 = W - M.r;
+  const yOf = (l) => M.t + (1 - l) * (H - M.t - M.b);
+  const xOf = (p) => (p.s < NEUTRAL_S ? M.l + band / 2 : hx0 + (p.h / 360) * (hx1 - hx0));
+  const rOf = (n) => Math.min(14, 6 + 2 * Math.sqrt(n - 1));
+
+  const chart = svg('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `Nuancier : ${plural(points.length, 'couleur', 'couleurs')}` });
+  for (const l of [0, 0.25, 0.5, 0.75, 1]) {
+    const y = yOf(l);
+    chart.append(svg('line', { class: 'grid-line', x1: M.l, x2: W - M.r, y1: y, y2: y }),
+      svg('text', { class: 'ax-tick', x: M.l - 8, y, 'text-anchor': 'end', 'dominant-baseline': 'central', text: `${l * 100} %` }));
+  }
+  for (const [deg, name] of HUE_TICKS) {
+    const x = hx0 + (deg / 360) * (hx1 - hx0);
+    chart.append(svg('line', { class: 'grid-line', x1: x, x2: x, y1: M.t, y2: H - M.b }),
+      svg('text', { class: 'ax-tick', x, y: H - M.b + 16, 'text-anchor': deg === 0 ? 'start' : deg === 360 ? 'end' : 'middle', text: name }));
+  }
+  chart.append(svg('rect', { class: 'sw-band', x: M.l, y: M.t, width: band, height: H - M.t - M.b, rx: 4 }),
+    svg('text', { class: 'ax-tick', x: M.l + band / 2, y: H - M.b + 16, 'text-anchor': 'middle', text: 'neutres' }),
+    svg('text', { class: 'ax-title', x: M.l, y: H - 4, text: 'Luminosité ↑ · teinte →' }));
+
+  const zone = detailZone(ctx, 'Survolez une pastille, ou parcourez-les au clavier, pour voir les composants qui l’utilisent.');
+  // Les plus grosses d'abord : les petites restent visibles au-dessus.
+  for (const p of [...points].sort((a, b) => b.keys.length - a.keys.length)) {
+    const x = xOf(p);
+    const y = yOf(p.l);
+    const r = rOf(p.keys.length);
+    const role = `${p.hex}, ${plural(p.keys.length, 'composant', 'composants')}`;
+    const g = svg('g', { class: 'sw-dot', 'data-hex': p.hex },
+      svg('circle', { class: 'hit', cx: x, cy: y, r: r + 4 }),
+      svg('circle', { class: swatchClasses(p.hex), cx: x, cy: y, r, style: `fill:${p.hex}` }),
+      svg('title', { text: role }));
+    interactive(g, role, () => zone.show(p.hex, h('span.sw', null, h('span.chip', { style: `background:${p.hex}` }), h('code', { text: p.hex })), p.keys, g));
+    chart.append(g);
+  }
+
+  const table = h('details.viz-table', null, h('summary', { text: 'Voir en tableau' }),
+    h('div.scroll-x', null, h('table.metrics', null,
+      h('thead', null, h('tr', null, ['Couleur', 'Teinte', 'Saturation', 'Luminosité', 'Composants'].map((t) => h('th', { scope: 'col', text: t })))),
+      h('tbody', null, points.map((p) => h('tr', null,
+        h('td', null, h('span.sw', null, h('span.chip', { style: `background:${p.hex}` }), h('code', { text: p.hex }))),
+        h('td', { text: `${Math.round(p.h)}°` }), h('td', { text: `${Math.round(p.s * 100)} %` }),
+        h('td', { text: `${Math.round(p.l * 100)} %` }), h('td', { text: String(p.keys.length) })))))));
+
+  container.append(h('section.viz-block', null, head, h('div.viz', null, chart), zone.el, table));
+}
+
+// ── Mesures ──
+
+const METRICS = [
+  ['height', 'Hauteur'], ['radius', 'Rayon'], ['fontSize', 'Taille de police'],
+  ['paddingX', 'Marge interne horizontale'], ['paddingY', 'Marge interne verticale'],
+];
+const PILL = 100; // rayon ≥ 100 px : forme pilule, regroupée hors échelle
+
+function niceTicks(lo, hi, count = 6) {
+  if (hi <= lo) { lo -= 4; hi += 4; }
+  const raw = (hi - lo) / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((k) => k * mag).find((s) => s >= raw) || raw;
+  const start = Math.floor(lo / step) * step;
+  const end = Math.ceil(hi / step) * step;
+  const ticks = [];
+  for (let v = start; v <= end + step / 2; v += step) ticks.push(Math.round(v * 100) / 100);
+  return ticks;
+}
+
+function stripPlot(container, ctx, metric, label, series, group) {
+  const pills = metric === 'radius' ? series.filter((s) => s.value >= PILL) : [];
+  const scaled = series.filter((s) => !pills.includes(s));
+  const W = chartWidth(container, 520);
+  const H = 76;
+  const M = { l: 16, r: pills.length ? 76 : 20, t: 22 };
+  const y = M.t + 18;
+  const vals = scaled.map((s) => s.value);
+  const ticks = niceTicks(vals.length ? Math.min(...vals) : 0, vals.length ? Math.max(...vals) : PILL);
+  const lo = ticks[0];
+  const hi = ticks[ticks.length - 1];
+  const xOf = (v) => M.l + ((v - lo) / (hi - lo)) * (W - M.l - M.r);
+  const rOf = (n) => Math.min(12, 4 + 2.5 * Math.sqrt(n - 1));
+
+  const chart = svg('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `${label} : ${plural(series.length, 'valeur différente', 'valeurs différentes')}` });
+  chart.append(svg('line', { class: 'axis-line', x1: M.l, x2: W - M.r, y1: y, y2: y }));
+  for (const t of ticks) {
+    chart.append(svg('line', { class: 'grid-line', x1: xOf(t), x2: xOf(t), y1: y - 4, y2: y + 4 }),
+      svg('text', { class: 'ax-tick', x: xOf(t), y: H - 6, 'text-anchor': 'middle', text: String(t) }));
+  }
+  const pillX = W - M.r / 2 - 6;
+  if (pills.length) chart.append(svg('text', { class: 'ax-tick', x: pillX, y: H - 6, 'text-anchor': 'middle', text: `≥ ${PILL} (pilule)` }));
+
+  const zone = detailZone(ctx, 'Survolez un point pour voir les composants qui ont cette valeur.', group);
+  const extremes = new Set(scaled.length > 1 ? [scaled[0].value, scaled[scaled.length - 1].value] : []);
+  for (const s of [...series].sort((a, b) => b.keys.length - a.keys.length)) {
+    const x = pills.includes(s) ? pillX : xOf(s.value);
+    const r = rOf(s.keys.length);
+    const text = `${label} ${s.value} px, ${plural(s.keys.length, 'composant', 'composants')}`;
+    const g = svg('g', { class: 'st-dot', 'data-value': s.value },
+      svg('circle', { class: 'hit', cx: x, cy: y, r: Math.max(r + 4, 10) }),
+      svg('circle', { class: 'st-mark', cx: x, cy: y, r }),
+      svg('title', { text }));
+    if (extremes.has(s.value)) g.append(svg('text', { class: 'ax-value', x, y: y - r - 6, 'text-anchor': 'middle', text: `${s.value}` }));
+    interactive(g, text, () => zone.show(`${metric}:${s.value}`, `${label} · ${s.value} px`, s.keys, g));
+    chart.append(g);
+  }
+
+  const n = series.length;
+  return h('section.viz-block.strip', { 'data-metric': metric },
+    h('header.strip-head', null, h('h3', { text: label }),
+      h('span.count', { text: n > 1 ? `${n} valeurs différentes` : n === 1 ? '1 seule valeur' : 'aucune valeur' })),
+    h('div.viz', null, chart),
+    zone.el,
+    h('details.viz-table', null, h('summary', { text: 'Voir en tableau' }),
+      h('table.metrics', null,
+        h('thead', null, h('tr', null, h('th', { scope: 'col', text: 'Valeur' }), h('th', { scope: 'col', text: 'Composants' }))),
+        h('tbody', null, series.map((s) => h('tr', null, h('td', { text: `${s.value} px` }),
+          h('td', { text: s.keys.map((k) => ctx.byKey.get(k)?.name ?? k).join(', ') })))))));
+}
+
+export function renderMetricsView(container, components, ctx) {
+  const tax = ctx.data.taxonomy;
+  const present = new Map();
+  for (const c of components) present.set(c.type, (present.get(c.type) ?? 0) + 1);
+  const types = tax.filter((t) => present.has(t.slug));
+  if (!types.length) { emptyState(container, ctx); return; }
+  const st = ctx.state;
+  if (!st.mType) st.mType = 'button';
+  const type = present.has(st.mType) ? st.mType : types[0].slug;
+  const select = h('select', { id: 'm-type' }, types.map((t) => h('option', { value: t.slug, selected: t.slug === type, text: `${t.label} (${present.get(t.slug)})` })));
+  select.addEventListener('change', () => { st.mType = select.value; ctx.rerender(); });
+
+  container.append(vizHead('Mesures',
+    'Chaque point est une valeur distincte, arrondie au pixel ; sa taille suit le nombre de composants qui la partagent.',
+    h('label.field', null, h('span', { text: 'Type mesuré' }), select)));
+  const group = [];
+  for (const [metric, label] of METRICS) {
+    container.append(stripPlot(container, ctx, metric, label, metricSeries(components, type, metric), group));
+  }
 }

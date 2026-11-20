@@ -115,3 +115,104 @@ export function formatDate(iso) {
 export function typeLabel(taxonomy, slug) {
   return (taxonomy.find((t) => t.slug === slug) ?? { label: slug }).label;
 }
+
+// ── Vues de comparaison (Matrice, Couleurs, Mesures) ──────────────────────────
+
+const COLOR_ROLES = ['bg', 'fg', 'border'];
+
+/** Comptes type × projet des composants visibles (non measureOnly), pondérés par 1. */
+export function matrixCounts(components, taxonomy, projects) {
+  const known = new Set(taxonomy.map((t) => t.slug));
+  const counts = new Map(); // type → Map(projet → n)
+  const perProject = new Map();
+  for (const c of components) {
+    if (c.measureOnly) continue;
+    const type = known.has(c.type) ? c.type : 'other';
+    if (!counts.has(type)) counts.set(type, new Map());
+    const row = counts.get(type);
+    row.set(c.project, (row.get(c.project) ?? 0) + 1);
+    perProject.set(c.project, (perProject.get(c.project) ?? 0) + 1);
+  }
+  const rows = taxonomy.map((t) => t.slug).filter((s) => counts.has(s));
+  const cols = (projects ?? [...perProject].map(([value, count]) => ({ value, count })).sort(byCountThenName).map((p) => p.value))
+    .filter((p) => perProject.has(p));
+  const cells = rows.map((r) => cols.map((p) => counts.get(r).get(p) ?? 0));
+  const max = cells.reduce((m, row) => Math.max(m, ...row), 0);
+  return { rows, cols, cells, max };
+}
+
+/** Marche (1..steps) d'une rampe séquentielle pour `count` sur `max` ; 0 pour une case vide. */
+export function seqStep(count, max, steps) {
+  if (!(count > 0) || !(max > 0)) return 0;
+  return Math.min(steps, Math.max(1, Math.ceil((count / max) * steps)));
+}
+
+// '#rgb'|'#rrggbb'[aa] → {h:0-360, s:0-1, l:0-1} (alpha ignoré). Partagé avec scripts/lib/color.mjs.
+export function hexToHsl(hex) {
+  let v = String(hex).replace('#', '');
+  if (v.length === 3 || v.length === 4) v = [...v].map((c) => c + c).join('');
+  const r = parseInt(v.slice(0, 2), 16) / 255;
+  const g = parseInt(v.slice(2, 4), 16) / 255;
+  const b = parseInt(v.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  if (h < 0) h += 360;
+  return { h, s, l };
+}
+
+function relLuminance(hex) {
+  const v = String(hex).replace('#', '');
+  const full = v.length === 3 || v.length === 4 ? [...v].map((c) => c + c).join('') : v;
+  const lin = (i) => {
+    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+}
+
+/** Rapport de contraste WCAG 2 entre deux couleurs hex (alpha ignoré). */
+export function contrastRatio(a, b) {
+  const [x, y] = [relLuminance(a), relLuminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+const themeMetrics = (c, theme) => (c.metrics && ((theme === 'dark' && c.metrics.dark) || c.metrics.light)) || null;
+
+/** Couleurs uniques (fond, texte, bordure) du thème, avec les clés des composants qui les utilisent. */
+export function colorPoints(components, theme) {
+  const byHex = new Map();
+  for (const c of components) {
+    const m = themeMetrics(c, theme);
+    if (!m) continue;
+    for (const role of COLOR_ROLES) {
+      if (!m[role]) continue;
+      const hex = String(m[role]).toLowerCase();
+      if (!byHex.has(hex)) byHex.set(hex, new Set());
+      byHex.get(hex).add(c.key);
+    }
+  }
+  return [...byHex].map(([hex, keys]) => ({ hex, ...hexToHsl(hex), keys: [...keys] }))
+    .sort((a, b) => a.h - b.h || b.l - a.l);
+}
+
+/** Valeurs distinctes (arrondies au px, triées) d'une mesure pour un type, measureOnly inclus. */
+export function metricSeries(components, type, metric) {
+  const byValue = new Map();
+  for (const c of components) {
+    if (c.type !== type) continue;
+    const v = c.metrics && c.metrics.light ? c.metrics.light[metric] : undefined;
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const r = Math.round(v);
+    if (!byValue.has(r)) byValue.set(r, []);
+    byValue.get(r).push(c.key);
+  }
+  return [...byValue].sort((a, b) => a[0] - b[0]).map(([value, keys]) => ({ value, keys }));
+}

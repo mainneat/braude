@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   fold, filterComponents, groupByTypeThenProject, parseRoute, enrichComponents, summarize, sinceFromPeriod,
-  facetOptions, unanalysed, formatDate,
+  facetOptions, unanalysed, formatDate, matrixCounts, colorPoints, metricSeries, hexToHsl, contrastRatio, seqStep,
 } from '../gallery/src/logic.mjs';
 
 const TAX = [{ slug: 'button', label: 'Button' }, { slug: 'toggle', label: 'Toggle / switch' }, { slug: 'card', label: 'Card' }, { slug: 'other', label: 'Autre' }];
@@ -101,4 +101,73 @@ test('unanalysed lists skipped and error artifacts', () => {
 
 test('formatDate is French and stable', () => {
   assert.equal(formatDate('2026-11-20T08:30:00.000Z'), '20 nov. 2026');
+});
+
+const M = (light, dark) => ({ metrics: { light: { bg: null, fg: null, border: null, radius: 0, fontSize: 14, height: 32, paddingX: 0, paddingY: 0, ...light }, dark: dark && { bg: null, fg: null, border: null, radius: 0, fontSize: 14, height: 32, paddingX: 0, paddingY: 0, ...dark } } });
+
+test('matrixCounts', () => {
+  const xs = [
+    C('a', 'button', 'a', 'Nimbus'), C('b', 'button', 'b', 'Nimbus', { occurrences: 9 }), C('c', 'button', 'c', 'Lumen'),
+    C('d', 'card', 'd', 'Lumen'), C('e', 'card', 'e', 'Nimbus', { measureOnly: true }), C('f', 'toggle', 'f', 'Zèbre', { measureOnly: true }),
+  ];
+  const m = matrixCounts(xs, TAX, ['Nimbus', 'Lumen', 'Zèbre']);
+  assert.deepEqual(m.rows, ['button', 'card'], 'taxonomy order, types with no visible component omitted');
+  assert.deepEqual(m.cols, ['Nimbus', 'Lumen'], 'given order, projects with no visible component omitted');
+  assert.deepEqual(m.cells, [[2, 1], [0, 1]], 'weighted by 1 (not occurrences), empty cell = 0, measureOnly ignored');
+  assert.equal(m.max, 2);
+  const derived = matrixCounts(xs, TAX);
+  assert.deepEqual(derived.cols, ['Lumen', 'Nimbus'], 'without projects: by count desc then name');
+  assert.deepEqual(matrixCounts([], TAX, []), { rows: [], cols: [], cells: [], max: 0 });
+  assert.deepEqual(matrixCounts([C('z', 'mystery', 'z', 'P')], TAX).rows, ['other'], 'unknown type lands in other');
+});
+
+test('seqStep maps a count to a ramp step', () => {
+  assert.equal(seqStep(0, 10, 5), 0, 'empty cell has no step');
+  assert.equal(seqStep(1, 10, 5), 1);
+  assert.equal(seqStep(10, 10, 5), 5);
+  assert.equal(seqStep(5, 10, 5), 3);
+  assert.equal(seqStep(1, 1, 5), 5);
+});
+
+test('colorPoints dedupes and maps keys', () => {
+  const xs = [
+    C('a', 'button', 'a', 'P', { ...M({ bg: '#FFFFFF', fg: '#2f6bff' }, { bg: '#121212', fg: '#ffffff' }) }),
+    C('b', 'card', 'b', 'P', { ...M({ bg: '#ffffff', border: '#2f6bff' }) }),
+    C('c', 'other', 'c', 'P', { measureOnly: true, ...M({ fg: '#ff0000' }) }),
+    C('d', 'other', 'd', 'P', { metrics: {} }),
+  ];
+  const light = colorPoints(xs, 'light');
+  const white = light.find((p) => p.hex === '#ffffff');
+  assert.ok(white, 'hex normalised to lowercase');
+  assert.deepEqual(white.keys, ['a', 'b']);
+  assert.deepEqual(light.find((p) => p.hex === '#2f6bff').keys, ['a', 'b'], 'fg and border both count, key listed once');
+  assert.deepEqual(light.find((p) => p.hex === '#ff0000').keys, ['c'], 'measureOnly included');
+  assert.equal(light.length, 3, 'null ignored');
+  assert.equal(light.find((p) => p.hex === '#ff0000').h, 0);
+  assert.equal(light.find((p) => p.hex === '#ff0000').s, 1);
+  assert.equal(light.find((p) => p.hex === '#ff0000').l, 0.5);
+  const dark = colorPoints(xs, 'dark');
+  assert.deepEqual(dark.find((p) => p.hex === '#ffffff').keys, ['a', 'b'], 'a dark fg; b falls back to light metrics');
+  assert.deepEqual(dark.find((p) => p.hex === '#121212').keys, ['a']);
+});
+
+test('hexToHsl and contrastRatio', () => {
+  assert.deepEqual(hexToHsl('#ff0000'), { h: 0, s: 1, l: 0.5 });
+  assert.deepEqual(hexToHsl('#0000ff80'), { h: 240, s: 1, l: 0.5 }, 'alpha ignored');
+  assert.equal(Math.round(contrastRatio('#000000', '#ffffff')), 21);
+  assert.equal(contrastRatio('#ffffff', '#ffffff'), 1);
+  assert.ok(contrastRatio('#fafafa', '#ffffff') < 1.2);
+});
+
+test('metricSeries groups rounded values', () => {
+  const xs = [
+    C('a', 'button', 'a', 'P', M({ height: 36 })),
+    C('b', 'button', 'b', 'P', M({ height: 36.4 })),
+    C('c', 'button', 'c', 'P', { measureOnly: true, ...M({ height: 46 }) }),
+    C('d', 'card', 'd', 'P', M({ height: 36 })),
+    C('e', 'button', 'e', 'P', { metrics: {} }),
+  ];
+  assert.deepEqual(metricSeries(xs, 'button', 'height'), [{ value: 36, keys: ['a', 'b'] }, { value: 46, keys: ['c'] }]);
+  assert.deepEqual(metricSeries(xs, 'button', 'radius'), [{ value: 0, keys: ['a', 'b', 'c'] }]);
+  assert.deepEqual(metricSeries(xs, 'chip', 'height'), []);
 });

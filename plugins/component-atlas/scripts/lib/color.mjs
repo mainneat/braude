@@ -29,23 +29,5 @@ export function toHex(css) {
   return a >= 1 ? base : base + h2(a * 255);
 }
 
-// '#rgb'|'#rrggbb'[aa] -> {h:0-360, s:0-1, l:0-1}
-export function hexToHsl(hex) {
-  let v = String(hex).replace('#', '');
-  if (v.length === 3 || v.length === 4) v = [...v].map((c) => c + c).join('');
-  const r = parseInt(v.slice(0, 2), 16) / 255;
-  const g = parseInt(v.slice(2, 4), 16) / 255;
-  const b = parseInt(v.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (d === 0) return { h: 0, s: 0, l };
-  const s = d / (1 - Math.abs(2 * l - 1));
-  let h;
-  if (max === r) h = ((g - b) / d) % 6;
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  h *= 60;
-  if (h < 0) h += 360;
-  return { h, s, l };
-}
+// '#rgb'|'#rrggbb'[aa] -> {h:0-360, s:0-1, l:0-1} : implémentation partagée avec la galerie.
+export { hexToHsl } from '../../gallery/src/logic.mjs';
