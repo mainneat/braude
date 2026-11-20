@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   fold, filterComponents, groupByTypeThenProject, parseRoute, enrichComponents, summarize, sinceFromPeriod,
-  facetOptions, unanalysed, formatDate, matrixCounts, colorPoints, metricSeries, hexToHsl, contrastRatio, seqStep,
+  facetOptions, unanalysed, formatDate, matrixCounts, colorPoints, metricSeries, hexToHsl, contrastRatio, seqStep, unpackComponent,
 } from '../gallery/src/logic.mjs';
 
 const TAX = [{ slug: 'button', label: 'Button' }, { slug: 'toggle', label: 'Toggle / switch' }, { slug: 'card', label: 'Card' }, { slug: 'other', label: 'Autre' }];
@@ -214,4 +214,18 @@ test('stylesOf resolves per-group chunked styles, with legacy per-artifact fallb
   assert.equal(stylesOf(data, { artifactId: 'x', styleId: 'x:g1' }), a, 'memoised: one sheet per group');
   assert.match(stylesOf(data, { artifactId: 'x', styleId: 'x:g2' }).cssLight, /--a:2/);
   assert.equal(stylesOf(data, { artifactId: 'old' }).cssLight, '.o{}');
+});
+
+test('unpackComponent restores the compact data.json record', () => {
+  const c = unpackComponent({ key: 'k', artifactId: 'x', occurrences: 3, sg: 'g1',
+    metrics: { light: { bg: '#fff', fg: '#000', height: 32 }, dark: { bg: '#111' } } });
+  assert.deepEqual(c.sources, [{ artifactId: 'x', occurrences: 3 }]);
+  assert.equal(c.styleId, 'x:g1');
+  assert.equal(c.sg, undefined);
+  assert.equal(c.isDS, false);
+  assert.deepEqual(c.metrics.dark, { bg: '#111', fg: '#000', height: 32 });
+  // Déjà complet : inchangé.
+  const full = { key: 'k', artifactId: 'x', occurrences: 1, isDS: true, styleId: 'x:main', sources: [{ artifactId: 'y', occurrences: 1 }],
+    metrics: { light: { bg: '#fff' }, dark: { bg: '#000' } } };
+  assert.deepEqual(unpackComponent(full), full);
 });

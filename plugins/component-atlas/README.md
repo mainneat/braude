@@ -37,7 +37,7 @@ Tout l'état de travail est dans `.component-atlas/`, dans le répertoire où vo
 - `inventory.json`, `plan.json`, `cache.json` (dont l'URL de la galerie)
 - `raw/<id>/` : fichiers téléchargés, candidats, captures, classification
 - `projects.json` : projet de chaque artifact
-- `dist/` : `index.html` et `data.json` publiés
+- `dist/` : `index.html`, `data.json` (index léger : filtres, matrice, mesures) et `a/<artifactId>.json` (HTML et CSS de chaque artifact, chargés à la demande par la galerie), publiés ensemble ; `scripts/publish-plan.mjs` découpe la publication en lots
 
 Supprimer `cache.json` force un retraitement complet.
 

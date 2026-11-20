@@ -39,14 +39,15 @@ Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` (et `conta
 ## 4. Classification (sous-agents)
 Seuls les artifacts `ok` qui ont un `candidates.json` non vide (sans candidat, ne classe rien : le build les accepte vides). Lots de 8, un sous-agent par lot, en parallèle. **Exception : chaque artifact `design` a son propre sous-agent** (jusqu'à 250 candidats). Compte ses candidats à classer :
 `node -e "console.log(require('./D/raw/<id>/candidates.json').filter(x=>!x.measureOnly).length)"`
-S'il y en a **plus de 150**, découpe les index en plages d'environ 100 (ex. 0–99, 100–199, 200–249) et lance un sous-agent par plage, en parallèle : chacun ne traite que sa plage, ne lit que les planches dont `[from, to]` (dans `D/raw/<id>/contact.json`) recoupe sa plage, et écrit `D/raw/<id>/classified.part<k>.json` (k = 1, 2, 3…, même format que classified.json, même règle de projet) au lieu de classified.json, sans lancer la validation. Ensuite, dans la conversation principale : `node "<base>/../../scripts/merge-classified.mjs" D/raw/<id>` (fusionne les parties en `classified.json` et valide ; s'il affiche des erreurs, relance un sous-agent pour les index manquants dans une nouvelle partie, puis refusionne une fois).
+S'il y en a **plus de 150**, découpe les index en plages d'environ 100 (ex. 0–99, 100–199, 200–249) et lance un sous-agent par plage, en parallèle : chacun ne traite que sa plage et ne lit que les planches dont `[from, to]` (dans `D/raw/<id>/contact.json`) recoupe sa plage. Ajoute au prompt type, en tête et en clair : **« Mode plage A–B : écris `D/raw/<id>/classified.part<k>.json` (pas classified.json), même format, un item pour chaque index de A à B ; ne lance pas la validation. »** (k = 1, 2, 3…, même règle de projet). Ensuite, dans la conversation principale : `node "<base>/../../scripts/merge-classified.mjs" D/raw/<id>` (fusionne les parties en `classified.json` et valide ; s'il affiche des erreurs, relance un sous-agent pour les index manquants dans une nouvelle partie, puis refusionne une fois).
 
 Prompt type :
 
 > Pour chaque artifact `<id>` du lot :
-> 1. Lis avec l'outil Read les planches-contact listées dans `D/raw/<id>/contact.json` (`contact.png`, `contact-2.png`…, tuiles numérotées par index) : toutes, ou pour une plage d'index, celles dont `[from, to]` la recoupe.
+> 1. **Obligatoire** : regarde avec l'outil Read les planches-contact listées dans `D/raw/<id>/contact.json` (`contact.png`, `contact-2.png`…, tuiles numérotées par index) : toutes, ou pour une plage d'index, celles dont `[from, to]` la recoupe. Le texte seul ne suffit pas : c'est l'image qui révèle les tuiles vides, cassées ou qui ne sont que de la mise en page, à rejeter.
 > 2. Lis une version compacte des candidats à classer, jamais le HTML ; les candidats `measureOnly` (mesures internes, typés automatiquement) sont exclus (pour une plage, ajoute `&&x.index>=A&&x.index<=B` au filtre) :
->    `node -e "const c=require('./D/raw/<id>/candidates.json');console.log(JSON.stringify(c.filter(x=>!x.measureOnly).map(({index,kind,tag,role,text,context,presetName,occurrences})=>({index,kind,tag,role,text,context,presetName,occurrences}))))"`
+>    `node -e "const c=require('./D/raw/<id>/candidates.json');const t=(s)=>s&&String(s).slice(0,80);console.log(JSON.stringify(c.filter(x=>!x.measureOnly).map(({index,kind,tag,role,text,context,presetName,occurrences})=>({index,kind,tag,role,text:t(text),context:t(context),presetName,occurrences}))))"`
+>    (`text` et `context` sont tronqués à 80 caractères.)
 > 3. Lis les noms de projets existants : valeurs de `D/projects.json` s'il existe, sinon de `<base>/../../seed/projects.louis.json`.
 > 4. Écris `D/raw/<id>/classified.json` = `{"project":"…","items":[{"index":0,"keep":true,"type":"button","name":"…"}]}` avec **un item pour chaque index affiché à l'étape 2** (chaque candidat non `measureOnly`). Pour un artifact Design, `context` commence par le titre de la planche (artboard).
 >
@@ -54,23 +55,26 @@ Prompt type :
 > - `project` : réutilise un nom existant quand l'artifact en relève ; sinon un nom court nouveau.
 > - `type` : exactement un de ces slugs (libellé entre parenthèses) :
 >   `button` (Button), `icon-button` (Icon button), `toggle` (Toggle / switch), `segmented` (Segmented control / tabs), `checkbox-radio` (Checkbox / radio), `input` (Input / search), `select` (Select / dropdown), `slider` (Slider), `card` (Card), `chip` (Chip / tag / badge), `avatar` (Avatar), `icon` (Icon), `navigation` (Navigation), `list-item` (List item / row), `overlay` (Modal / sheet / popover), `toast` (Toast / banner), `chart` (Chart / data viz), `other` (Autre).
-> - `keep:false` pour : wrappers de mise en page, chrome de page (en-têtes, pieds, titres), contrôles de démo de la page elle-même (sélecteur de thème du showcase, etc.), doublons visuels (garde le plus représentatif). Mets quand même un `type` valide (`other`).
+> - `keep:false` pour : wrappers de mise en page, chrome de page (en-têtes, pieds, titres), contrôles de démo de la page elle-même (sélecteur de thème du showcase, etc.), tuiles vides ou cassées sur la planche. Mets quand même un `type` valide (`other`).
+> - Doublons : des tuiles identiques (même rendu, même libellé), y compris dans toute ta plage d'index (ex. le même bouton Close / Dismiss répété sur chaque modale) → garde **un** représentatif (`keep:true`), `keep:false` pour les autres. Des variantes réellement différentes (taille, état, couleur) se gardent toutes.
+> - Cartes conteneurs : une carte qui regroupe plusieurs composants déjà gardables (boutons, champs, puces…) n'est gardée que si elle est elle-même un composant dessiné (ex. une carte produit, une carte de transfert) ; un simple panneau ou une section qui les range → `keep:false`.
+> - Fondations de Design System : les aperçus de palette, grille, échelle typographique, espacements, couleurs, rayons, ombres, iconographie en planche (Palette, Grid, TypeScale, Spacing, Colors…) ne sont pas des composants → `keep:false`.
 > - `name` : court (2-4 mots), tiré du contexte, dans la langue de l'artifact. Pour un composant de Design System, garde `presetName` tel quel.
 > - Valide : `node "<base>/../../scripts/validate-classified.mjs" D/raw/<id>`. S'il affiche des erreurs (exit 1), corrige et revalide **une seule fois**.
 > Renvoie une ligne par artifact : `id | projet | N gardés / M | ok ou erreur`.
 
 ## 5. Build
 `node "<base>/../../scripts/build.mjs" --dir .component-atlas`
-Produit `D/dist/index.html`, `D/dist/data.json` et met à jour `cache.json` et `projects.json`. Si le build échoue (ex. données > 15 Mo), explique le message à l'utilisateur et arrête-toi.
+Produit `D/dist/index.html`, `D/dist/data.json` (filtres, matrice, couleurs, mesures, légendes : ni HTML ni CSS), une part par artifact `D/dist/a/<artifactId>.json` (HTML de ses composants et son CSS, chargés à la demande par la galerie ; découpée en `a/<id>-2.json`… au-delà de 4 Mo) et met à jour `cache.json` et `projects.json`. `dist/a/` est vidé à chaque build : il ne contient que les parts courantes. Si le build échoue (ex. data.json > 15 Mo), explique le message à l'utilisateur et arrête-toi.
 
 ## 6. Publication
-Lis `D/cache.json` pour `galleryUrl`. Appelle `Artifact` (publish) avec :
-- `file_path` = chemin absolu de `D/dist/index.html`
-- `files` = `{"data.json": "<chemin absolu de D/dist/data.json>"}`
-- `url` = `galleryUrl` s'il est non nul (mise à jour sur place). Sinon premier publish : ajoute `icon:"grid"` et `description` (une phrase, ex. "Atlas visuel des composants de mes artifacts claude.ai").
-
-Puis enregistre l'URL renvoyée :
-`node -e "const f='.component-atlas/cache.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f));c.galleryUrl='<URL>';fs.writeFileSync(f,JSON.stringify(c,null,2))"`
+1. Plan des appels : `node "<base>/../../scripts/publish-plan.mjs" --dir .component-atlas`. Il affiche une liste JSON de lots `[{"file_path": "<abs>/dist/index.html", "files": {"data.json": "<abs>", "a/<id>.json": "<abs>", "a/<ancien>.json": null, …}}, …]` : au plus 250 fichiers et 60 Mo par lot (limites d'un publish : 255 fichiers, 64 Mo). Le premier lot porte `data.json`, les premières parts et les retraits (`null` = part publiée auparavant, d'un artifact supprimé ou redécoupé, à retirer) ; les suivants ajoutent les parts restantes. S'il échoue (galerie > 511 fichiers ou 256 Mo), relaie le message et arrête-toi.
+2. Lis `D/cache.json` pour `galleryUrl`. Pour chaque lot, **dans l'ordre**, appelle `Artifact` (publish) avec exactement son `file_path` et son `files` (tel quel, `null` compris), et :
+   - premier lot : `url` = `galleryUrl` s'il est non nul (mise à jour sur place) ; sinon premier publish : sans `url`, avec `icon:"grid"` et `description` (une phrase, ex. "Atlas visuel des composants de mes artifacts claude.ai") ;
+   - lots suivants : `url` = l'URL renvoyée par le premier lot (les fichiers omis sont conservés, ceux du lot sont ajoutés).
+   Si un lot échoue, réessaie-le une fois ; s'il échoue encore, arrête-toi et signale-le (la galerie s'affiche, les tuiles des parts manquantes montrent « Rendu indisponible »).
+3. Une fois **tous** les lots publiés, enregistre l'URL et les parts en ligne (sert aux retraits du prochain run) :
+   `node "<base>/../../scripts/publish-plan.mjs" --dir .component-atlas --done "<URL>"`
 
 ## 7. Compte rendu au designer
 Calcule les chiffres depuis `D/dist/data.json` avec `node -e` (ne l'affiche jamais en entier) : `components.length`, et `artifacts` par `status` (ok = analysés, skipped = non analysés, error = en erreur). Pour les erreurs, cite titre + note.
