@@ -34,14 +34,18 @@ Découpe `toProcess` en lots de 8 et lance un sous-agent par lot, **en parallèl
 > 5. Design : `Artifact read` avec `url`, `out_dir:"D/raw/<id>"` et `paths` = tous les fichiers listés sous `project/` **sauf** les images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.mp4`) et les dossiers qui n'en contiennent que (ex. `project/audit/`), **plus** `artifact-type/dc-runtime.js` (indispensable : c'est le runtime qui résout gabarits, `{{…}}`, `<sc-for>`/`<sc-if>` et `<dc-import>` ; ne prends aucun autre fichier de `artifact-type/`). 256 chemins max par appel : découpe en plusieurs appels sinon. Puis `node "<base>/../../scripts/extract-design.mjs" D/raw/<id>` (une à trois minutes pour une centaine de planches).
 > 6. Si une étape échoue (lecture, extraction), consigne `erreur` avec la raison en une ligne et passe au suivant : un artifact en échec ne doit jamais bloquer le lot.
 
-Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` (et `contact-2.png`, `contact-3.png`… quand la planche-contact est trop haute) et `extract.json` dans `raw/<id>/`. Les artifacts `other-type` ou en erreur n'ont pas de classification.
+Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` (et `contact-2.png`, `contact-3.png`…, une planche par ~2200 px), `contact.json` (pour chaque planche : `file`, `from`, `to` = plage d'index des tuiles) et `extract.json` dans `raw/<id>/`. Les artifacts `other-type` ou en erreur n'ont pas de classification.
 
 ## 4. Classification (sous-agents)
-Seuls les artifacts `ok` qui ont un `candidates.json` non vide (sans candidat, ne classe rien : le build les accepte vides). Lots de 8, un sous-agent par lot, en parallèle. Prompt type :
+Seuls les artifacts `ok` qui ont un `candidates.json` non vide (sans candidat, ne classe rien : le build les accepte vides). Lots de 8, un sous-agent par lot, en parallèle. **Exception : chaque artifact `design` a son propre sous-agent** (jusqu'à 250 candidats). Compte ses candidats à classer :
+`node -e "console.log(require('./D/raw/<id>/candidates.json').filter(x=>!x.measureOnly).length)"`
+S'il y en a **plus de 150**, découpe les index en plages d'environ 100 (ex. 0–99, 100–199, 200–249) et lance un sous-agent par plage, en parallèle : chacun ne traite que sa plage, ne lit que les planches dont `[from, to]` (dans `D/raw/<id>/contact.json`) recoupe sa plage, et écrit `D/raw/<id>/classified.part<k>.json` (k = 1, 2, 3…, même format que classified.json, même règle de projet) au lieu de classified.json, sans lancer la validation. Ensuite, dans la conversation principale : `node "<base>/../../scripts/merge-classified.mjs" D/raw/<id>` (fusionne les parties en `classified.json` et valide ; s'il affiche des erreurs, relance un sous-agent pour les index manquants dans une nouvelle partie, puis refusionne une fois).
+
+Prompt type :
 
 > Pour chaque artifact `<id>` du lot :
-> 1. Lis `D/raw/<id>/contact.png` avec l'outil Read (tuiles numérotées par index), puis `contact-2.png`, `contact-3.png`… s'ils existent (`ls D/raw/<id>/contact*.png`) : lis-les tous.
-> 2. Lis une version compacte des candidats à classer, jamais le HTML ; les candidats `measureOnly` (mesures internes, typés automatiquement) sont exclus :
+> 1. Lis avec l'outil Read les planches-contact listées dans `D/raw/<id>/contact.json` (`contact.png`, `contact-2.png`…, tuiles numérotées par index) : toutes, ou pour une plage d'index, celles dont `[from, to]` la recoupe.
+> 2. Lis une version compacte des candidats à classer, jamais le HTML ; les candidats `measureOnly` (mesures internes, typés automatiquement) sont exclus (pour une plage, ajoute `&&x.index>=A&&x.index<=B` au filtre) :
 >    `node -e "const c=require('./D/raw/<id>/candidates.json');console.log(JSON.stringify(c.filter(x=>!x.measureOnly).map(({index,kind,tag,role,text,context,presetName,occurrences})=>({index,kind,tag,role,text,context,presetName,occurrences}))))"`
 > 3. Lis les noms de projets existants : valeurs de `D/projects.json` s'il existe, sinon de `<base>/../../seed/projects.louis.json`.
 > 4. Écris `D/raw/<id>/classified.json` = `{"project":"…","items":[{"index":0,"keep":true,"type":"button","name":"…"}]}` avec **un item pour chaque index affiché à l'étape 2** (chaque candidat non `measureOnly`). Pour un artifact Design, `context` commence par le titre de la planche (artboard).
