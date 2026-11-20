@@ -2,7 +2,7 @@
 
 Plugin Claude Code qui cartographie les composants UI de vos artifacts claude.ai : boutons, switchs, champs, cartes, etc. Claude liste vos artifacts, en extrait les composants avec un navigateur headless, les classe (type, nom, projet) puis publie une **galerie privée** : un artifact avec recherche, filtres par type et par projet, vues de comparaison (Matrice, Couleurs, Mesures) et thème clair/sombre.
 
-Les composants issus d'un artifact de type Design System portent un badge DS. Les artifacts de type Design (canevas d'artboards) sont analysés planche par planche avec le runtime du type ; les composants sont fusionnés entre planches (400 au plus par artifact, planches de composants d'abord). Les artifacts d'autres types (Slides, Docs, Data...) sont listés comme « non analysés ».
+Les composants issus d'un artifact de type Design System portent un badge DS. Les artifacts de type Design (canevas d'artboards) sont analysés planche par planche avec le runtime du type ; les composants sont fusionnés entre planches (250 au plus par artifact, planches de composants d'abord). Les artifacts d'autres types (Slides, Docs, Data...) sont listés comme « non analysés ».
 
 ## Installation
 

@@ -209,6 +209,10 @@ test('app-shell layout: tile shows the component (shell ancestors neutralised), 
   try {
     const sheet = await renderContactSheet(r.candidates, r.styles, join(dir, 'contact.png'), browser);
     assert.ok(!sheet.blank.includes(st.index), `Statements tile blank: ${JSON.stringify(sheet.blank)}`);
+    const tog = r.candidates.find((c) => /aria-label="Collapse"/.test(c.html) && c.tag === 'button');
+    assert.ok(tog, JSON.stringify(r.candidates.map((c) => c.text)));
+    assert.match(tog.html, /data-ca-pos/);
+    assert.ok(!sheet.blank.includes(tog.index), 'absolutely positioned element brought back into the tile');
     assert.ok(sheet.blank.includes(lost.index), 'element pushed out by its own layout is reported');
     assert.deepEqual(sheet.sheets.map((s) => [s.from, s.to]), [[0, r.candidates.length - 1]]);
   } finally { rmSync(dir, { recursive: true, force: true }); }

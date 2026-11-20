@@ -239,6 +239,9 @@
       else if (s.type !== 'file' && s.type !== 'password') d.setAttribute('value', s.value);
     });
     clone.querySelectorAll(inner ? 'script, style, link' : 'script').forEach((s) => s.remove());
+    // Positionné par rapport à son contexte (absolute/fixed) : hors contexte, il sortirait de la
+    // tuile ; marqué pour être remis dans le flux (voir SHELL_RESET_CSS).
+    if (!inner && /^(absolute|fixed)$/.test(getComputedStyle(el).position)) clone.setAttribute('data-ca-pos', '');
     return inner ? clone.innerHTML : clone.outerHTML;
   }
 

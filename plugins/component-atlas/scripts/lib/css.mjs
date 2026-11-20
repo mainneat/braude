@@ -145,7 +145,10 @@ export function forceSchemeCondition(cond, scheme) {
 export const SHELL_RESET_CSS = '[data-ca-shell]{display:block!important;position:static!important;inset:auto!important;'
   + 'float:none!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;'
   + 'max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;transform:none!important;'
-  + 'overflow:visible!important;grid-area:auto!important}';
+  + 'overflow:visible!important;grid-area:auto!important}'
+  // Élément positionné (absolute/fixed) par rapport à un ancêtre neutralisé : remis dans le flux.
+  + '[data-ca-pos]{position:relative!important;inset:auto!important;margin:0!important}'
+  + '.ca-body{position:relative}';
 
 // Séparateur de morceaux (une feuille source par morceau) dans un CSS de groupe de styles :
 // build.mjs découpe dessus pour dédoublonner les feuilles communes entre groupes.
