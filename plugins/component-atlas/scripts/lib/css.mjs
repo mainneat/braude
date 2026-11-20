@@ -138,10 +138,20 @@ export function forceSchemeCondition(cond, scheme) {
   return kept.join(' and ');
 }
 
+// Ancêtres de la coquille (data-ca-shell, posé par detect.js) : on neutralise la MISE EN PAGE
+// (grilles d'application, positions, tailles, marges) mais on garde la PEINTURE (fond, couleur,
+// police, bordure) : le composant s'affiche dans la tuile au lieu d'y rejouer toute l'app.
+// La racine .ca-body et l'élément lui-même ne sont pas concernés.
+export const SHELL_RESET_CSS = '[data-ca-shell]{display:block!important;position:static!important;inset:auto!important;'
+  + 'float:none!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;'
+  + 'max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;transform:none!important;'
+  + 'overflow:visible!important;grid-area:auto!important}';
+
 // RuleNode = {type:'style',selector,body} | {type:'media'|'supports'|'container',condition,children}
 //          | {type:'layer',name,children} | {type:'font-face',cssText} | {type:'keyframes'|'other',cssText}
 // opts.scheme : 'auto' (défaut, media intactes) | 'light' | 'dark' (prefers-color-scheme résolu).
-export function serializeScoped(rules, { scheme = 'auto' } = {}) {
+// opts.shellReset (défaut true) : ajoute SHELL_RESET_CSS à la fin.
+export function serializeScoped(rules, { scheme = 'auto', shellReset = true } = {}) {
   let css = '';
   let fontFaceCss = '';
   const walk = (list) => {
@@ -165,6 +175,6 @@ export function serializeScoped(rules, { scheme = 'auto' } = {}) {
     }
     return out;
   };
-  css = walk(rules);
+  css = walk(rules) + (shellReset ? SHELL_RESET_CSS : '');
   return { css, fontFaceCss };
 }

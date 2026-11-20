@@ -86,8 +86,12 @@ test('contact sheet splits into several images when too tall', async () => {
   try {
     const cands = Array.from({ length: 100 }, (_, i) => ({ index: i, tag: 'div', text: `t${i}`,
       html: `<div class="ca-body"><div style="height:300px;background:#${(i * 5 + 100).toString(16).padStart(3, '0')}">${i}</div></div>` }));
-    const files = await renderContactSheet(cands, { cssLight: '' }, join(d, 'contact.png'), browser);
+    const { files, sheets, blank } = await renderContactSheet(cands, { cssLight: '' }, join(d, 'contact.png'), browser);
     assert.ok(files.length >= 2, `files: ${files}`);
+    assert.deepEqual(blank, []);
+    assert.equal(sheets[0].from, 0);
+    assert.equal(sheets.at(-1).to, 99);
+    for (let i = 1; i < sheets.length; i++) assert.equal(sheets[i].from, sheets[i - 1].to + 1);
     assert.equal(files[0], join(d, 'contact.png'));
     assert.equal(files[1], join(d, 'contact-2.png'));
     for (const f of files) assert.ok(existsSync(f));

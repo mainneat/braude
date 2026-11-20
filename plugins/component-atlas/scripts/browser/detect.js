@@ -217,7 +217,7 @@
     let open = '', close = '';
     for (const p of chain) {
       const attrs = [...p.attributes].filter((a) => keepAttr(a.name)).map((a) => ` ${a.name}="${esc(a.value)}"`).join('');
-      open += `<${p.localName}${attrs}>`;
+      open += `<${p.localName}${attrs} data-ca-shell="">`;
       close = `</${p.localName}>` + close;
     }
     const bodyCls = typeof document.body.className === 'string' ? document.body.className : '';

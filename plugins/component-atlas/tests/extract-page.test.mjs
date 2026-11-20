@@ -51,14 +51,14 @@ test('basic page yields typed candidates', async () => {
   assert.ok(r.candidates.some((c) => c.kind === 'control' && c.html.includes('role="switch"')));
   assert.equal(r.candidates.filter((c) => c.tag === 'button').length, 2, 'hidden button ignored');
   r.candidates.forEach((c, i) => assert.equal(c.index, i));
-  for (const c of r.candidates) assert.doesNotMatch(c.html, /data-ca-/);
+  for (const c of r.candidates) assert.doesNotMatch(c.html, /data-ca-internal/);
   const save = r.candidates.find((c) => c.text === 'Enregistrer');
   assert.equal(save.context, 'Actions');
   assert.equal(save.occurrences, 1);
   assert.equal(save.metrics.light.bg, '#2f6bff');
   assert.equal(save.metrics.light.radius, 8);
   assert.ok(save.colors.includes('#2f6bff'));
-  assert.match(save.html, /^<div class="ca-body page"><main><div class="actions"><button class="btn">Enregistrer<\/button><\/div><\/main><\/div>$/);
+  assert.match(save.html, /^<div class="ca-body page"><main data-ca-shell=""><div class="actions" data-ca-shell=""><button class="btn">Enregistrer<\/button><\/div><\/main><\/div>$/);
   const card = r.candidates.find((c) => c.kind === 'card');
   assert.match(card.html, /Titre de carte/);
 });
@@ -77,12 +77,12 @@ test('JS-generated segmented control is captured with ancestor shell', async () 
   const seg = r.candidates.find((c) => c.kind === 'segmented');
   assert.ok(seg);
   assert.match(seg.html, /class="ca-body/);
-  assert.match(seg.html, /^<div class="ca-body"><section aria-labelledby="v1"><div class="demo" id="root"><div class="seg">/);
+  assert.match(seg.html, /^<div class="ca-body"><section aria-labelledby="v1" data-ca-shell=""><div class="demo" id="root" data-ca-shell=""><div class="seg">/);
   assert.equal(seg.context, 'Glass pill · Order ticket · binary market');
   // décor absolu ou sans texte ignoré dans la règle de majorité
   const pill = r.candidates.find((c) => c.kind === 'segmented' && c.text === 'A B');
   assert.ok(pill, 'pill with decorative spans is segmented');
-  assert.match(pill.html, /<section id="app"><div class="pill" id="pill">/);
+  assert.match(pill.html, /<section id="app" data-ca-shell=""><div class="pill" id="pill">/);
   assert.equal(r.candidates.filter((c) => c.kind === 'control').length, 0);
   // l'indicateur dépend de l'ancêtre .demo : il doit garder son fond blanc une fois scopé
   assert.equal(toHex(await renderedBg(r.styles, seg.html, 'light', '.ind')), '#ffffff');
@@ -166,7 +166,8 @@ test('CLI writes candidates, styles, status and contact sheet', () => {
     assert.equal(out.candidates, cands.length);
     assert.ok(cands.length > 0);
     const styles = JSON.parse(readFileSync(join(dir, 'styles.json'), 'utf8'));
-    assert.equal(typeof styles.css, 'string');
+    assert.equal(typeof styles.groups.main.css, 'string');
+    assert.ok(cands.every((c) => c.styleGroup === 'main'));
     assert.deepEqual(JSON.parse(readFileSync(join(dir, 'extract.json'), 'utf8')), { status: 'ok', warnings: [], candidates: cands.length });
     const png = readFileSync(join(dir, 'contact.png'));
     assert.equal(png.subarray(1, 4).toString(), 'PNG');
@@ -192,5 +193,23 @@ test('renderContactSheet renders numbered gallery tiles to a PNG', async () => {
     assert.equal(png.readUInt32BE(16), 1280, 'width');
     // Une rangée de tuiles au moins : hauteur > bandeau + tuile.
     assert.ok(png.readUInt32BE(20) > 100, `height ${png.readUInt32BE(20)}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('app-shell layout: tile shows the component (shell ancestors neutralised), off-tile elements reported', async () => {
+  const r = await run('app-shell.html');
+  assert.equal(r.status, 'ok', r.error);
+  const st = r.candidates.find((c) => c.text === 'Statements');
+  const lost = r.candidates.find((c) => c.text === 'Lost');
+  assert.ok(st && lost);
+  assert.match(st.html, /data-ca-shell/);
+  assert.doesNotMatch(st.html, /class="ca-body[^"]*"[^>]*data-ca-shell/, 'ca-body root not marked');
+  assert.match(r.styles.cssLight, /\[data-ca-shell\]\{display:block!important/);
+  const dir = mkdtempSync(join(tmpdir(), 'ca-sheet-'));
+  try {
+    const sheet = await renderContactSheet(r.candidates, r.styles, join(dir, 'contact.png'), browser);
+    assert.ok(!sheet.blank.includes(st.index), `Statements tile blank: ${JSON.stringify(sheet.blank)}`);
+    assert.ok(sheet.blank.includes(lost.index), 'element pushed out by its own layout is reported');
+    assert.deepEqual(sheet.sheets.map((s) => [s.from, s.to]), [[0, r.candidates.length - 1]]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scopeSelector, serializeScoped } from '../scripts/lib/css.mjs';
+import { scopeSelector, serializeScoped, SHELL_RESET_CSS } from '../scripts/lib/css.mjs';
 import { tokensToCss } from '../scripts/lib/tokens.mjs';
 
 test('scopeSelector', () => {
@@ -72,7 +72,8 @@ test('serializeScoped walks @layer and @container', () => {
     { type:'layer', name:'', children:[{ type:'style', selector:':root', body:'--a:1' }] },
     { type:'container', condition:'card (min-width: 300px)', children:[{ type:'style', selector:'html .x', body:'color:red' }] },
   ]);
-  assert.equal(out.css, '@layer base{.ca-body{margin:0}}@layer{:host{--a:1}}@container card (min-width: 300px){:host .x{color:red}}');
+  assert.equal(out.css, '@layer base{.ca-body{margin:0}}@layer{:host{--a:1}}@container card (min-width: 300px){:host .x{color:red}}' + SHELL_RESET_CSS);
+  assert.ok(!serializeScoped([], { shellReset: false }).css.includes('data-ca-shell'));
 });
 test('forceSchemeCondition', async () => {
   const { forceSchemeCondition: f } = await import('../scripts/lib/css.mjs');
@@ -93,7 +94,8 @@ test('serializeScoped scheme forcing', () => {
     { type:'media', condition:'(prefers-color-scheme: light) and (min-width: 600px)', children:[{ type:'style', selector:'.x', body:'color:red' }] },
     { type:'media', condition:'(min-width: 900px)', children:[{ type:'style', selector:'.y', body:'color:blue' }] },
   ];
-  assert.equal(serializeScoped(rules, { scheme:'dark' }).css, ':host{--bg:#fff}:host{--bg:#000}@media (min-width: 900px){.y{color:blue}}');
-  assert.equal(serializeScoped(rules, { scheme:'light' }).css, ':host{--bg:#fff}@media (min-width: 600px){.x{color:red}}@media (min-width: 900px){.y{color:blue}}');
+  assert.equal(serializeScoped(rules, { scheme:'dark' }).css, ':host{--bg:#fff}:host{--bg:#000}@media (min-width: 900px){.y{color:blue}}' + SHELL_RESET_CSS);
+  assert.equal(serializeScoped(rules, { scheme:'light' }).css, ':host{--bg:#fff}@media (min-width: 600px){.x{color:red}}@media (min-width: 900px){.y{color:blue}}' + SHELL_RESET_CSS);
+  assert.ok(serializeScoped(rules).css.endsWith(SHELL_RESET_CSS), 'shell reset appended to every variant');
   assert.match(serializeScoped(rules).css, /@media \(prefers-color-scheme: dark\)/);
 });
