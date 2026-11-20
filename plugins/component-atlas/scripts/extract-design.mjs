@@ -11,7 +11,8 @@ import { existsSync } from 'node:fs';
 import { join, resolve, extname, sep, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './lib/browser.mjs';
-import { serializeScoped } from './lib/css.mjs';
+import { serializeScoped, SHELL_RESET_CSS, CSS_CHUNK_SEP } from './lib/css.mjs';
+import { createHash } from 'node:crypto';
 import { extractRendered, writeRawOutputs } from './extract-page.mjs';
 
 const ORIGIN = 'http://design.atlas.invalid';
@@ -55,6 +56,9 @@ export async function listArtboards(project, canvas) {
     return { file, i, title: typeof b.title === 'string' && b.title.trim() ? b.title.trim() : '', page,
       w: Number(b.w), h: Number(b.h), component, inCanvas: file in boards || order.includes(file) };
   });
+  const counts = new Map();
+  for (const x of list) if (x.title) counts.set(x.title, (counts.get(x.title) ?? 0) + 1);
+  for (const x of list) x.repeated = !!x.title && counts.get(x.title) > 1;
   return list.sort((a, b) => (b.component - a.component) || (a.i - b.i));
 }
 
@@ -64,6 +68,8 @@ const titleOf = (html, file) => {
 };
 
 function stableKey(r) { return JSON.stringify(r); }
+const sha1 = (s) => createHash('sha1').update(s).digest('hex');
+const stemOf = (file) => file.split('/').pop().replace(/\.dc\.html$/, '');
 
 /**
  * Extrait un artifact Design copié dans `rawDir` (`project/…` et, si présent, `artifact-type/dc-runtime.js`).
@@ -71,10 +77,10 @@ function stableKey(r) { return JSON.stringify(r); }
  * budgetMs (temps total ; au-delà les planches restantes sont ignorées avec une note).
  */
 export async function extractDesign(rawDir, opts = {}) {
-  const { browser: shared, timeoutMs = 15000, maxCandidates = 400, perBoard = 150, budgetMs = 15 * 60 * 1000 } = opts;
+  const { browser: shared, timeoutMs = 15000, maxCandidates = 250, perBoard = 150, budgetMs = 15 * 60 * 1000 } = opts;
   const warnings = [];
   const note = (m) => { if (!warnings.includes(m)) warnings.push(m); };
-  const stats = { artboards: { total: 0, rendered: 0, failed: 0, skipped: 0 } };
+  const stats = { artboards: { total: 0, rendered: 0, notMounted: 0, failed: 0, skipped: 0 } };
   const fail = (error) => ({ status: 'error', error: String(error).slice(0, 1000), warnings, styles: emptyStyles(), candidates: [], stats });
   const root = resolve(rawDir);
   const project = join(root, 'project');
@@ -97,9 +103,11 @@ export async function extractDesign(rawDir, opts = {}) {
   let context;
   const candidates = [];
   const byKey = new Map();
-  const rules = [];
-  const seenRules = new Set();
-  const fontLinks = [];
+  // Groupes de styles : planches au même jeu de feuilles (identiques règle pour règle).
+  const sheetIds = new Map(); // clé de feuille → id
+  const sheetRules = []; // id → règles
+  const groupIds = new Map(); // liste d'ids de feuilles → gid
+  const groups = new Map(); // gid → { sheets:[ids], fontLinks:[] }
   let dropped = 0;
   const truncatedBoards = new Set();
   const started = Date.now();
@@ -125,7 +133,9 @@ export async function extractDesign(rawDir, opts = {}) {
       const label = board.title || board.file.replace(/\.dc\.html$/, '');
       if (!existsSync(path)) { note(`${label} : planche introuvable (${board.file})`); stats.artboards.failed++; continue; }
       if (Date.now() - started > budgetMs) { stats.artboards.skipped++; continue; }
-      const title = board.title || titleOf(await readFile(path, 'utf8').catch(() => ''), board.file);
+      const base = board.title || titleOf(await readFile(path, 'utf8').catch(() => ''), board.file);
+      // Titre répété sur plusieurs planches (« States » ×41) : on ajoute le nom du fichier.
+      const title = board.repeated ? `${base} (${stemOf(board.file)})` : base;
       await page.setViewportSize({ width: clamp(board.w, 360, 1920, 1280), height: clamp(board.h, 400, 1400, 900) }).catch(() => {});
       let mounted = true;
       const load = async (pg, t) => {
@@ -139,12 +149,17 @@ export async function extractDesign(rawDir, opts = {}) {
       const r = await extractRendered(load, { page, timeoutMs, maxCandidates: perBoard, keepRules: true, ownKeys: true });
       for (const w of r.warnings) note(`${title} : ${w}`);
       if (r.status !== 'ok') { note(`${title} : rendu impossible${r.error ? ` (${r.error})` : ''}`); stats.artboards.failed++; continue; }
-      if (mounted) stats.artboards.rendered++; else stats.artboards.failed++;
-      for (const rule of r.rules ?? []) {
-        const k = stableKey(rule);
-        if (!seenRules.has(k)) { seenRules.add(k); rules.push(rule); }
-      }
-      for (const u of r.styles.fontLinks) if (!fontLinks.includes(u)) fontLinks.push(u);
+      if (mounted) stats.artboards.rendered++; else stats.artboards.notMounted++;
+      const ids = (r.sheets ?? [r.rules ?? []]).map((list) => {
+        const k = sha1(stableKey(list));
+        if (!sheetIds.has(k)) { sheetIds.set(k, sheetRules.length); sheetRules.push(list); }
+        return sheetIds.get(k);
+      });
+      const gk = ids.join(',');
+      if (!groupIds.has(gk)) { const id = `g${groupIds.size + 1}`; groupIds.set(gk, id); groups.set(id, { sheets: ids, fontLinks: [] }); }
+      const gid = groupIds.get(gk);
+      const grp = groups.get(gid);
+      for (const u of r.styles.fontLinks) if (!grp.fontLinks.includes(u)) grp.fontLinks.push(u);
       for (const c of r.candidates) {
         const { ownKey, ...rest } = c;
         const key = ownKey ?? stableKey([c.html, c.metrics.light]);
@@ -152,7 +167,7 @@ export async function extractDesign(rawDir, opts = {}) {
         if (seen) { seen.occurrences += c.occurrences || 1; continue; }
         if (candidates.length >= maxCandidates) { dropped++; truncatedBoards.add(board.file); continue; }
         const ctx = rest.context ? `${title} · ${rest.context}` : title;
-        const out = { ...rest, index: candidates.length, context: cut(ctx, CONTEXT_MAX) };
+        const out = { ...rest, index: candidates.length, context: cut(ctx, CONTEXT_MAX), styleGroup: gid };
         byKey.set(key, out);
         candidates.push(out);
       }
@@ -162,12 +177,26 @@ export async function extractDesign(rawDir, opts = {}) {
       stats.artboards.truncated = truncatedBoards.size;
       note(`${dropped} candidat(s) au-delà du plafond de ${maxCandidates} ignoré(s), venant de ${truncatedBoards.size} planche(s) (planches de composants prioritaires)`);
     }
+    if (stats.artboards.notMounted) note(`${stats.artboards.notMounted} planche(s) non montée(s) par le runtime (gabarit brut)`);
     if (!stats.artboards.rendered && !candidates.length) return fail('Aucune planche rendue');
 
-    const { css, fontFaceCss } = serializeScoped(rules);
-    const cssLight = serializeScoped(rules, { scheme: 'light' }).css;
-    const cssDark = serializeScoped(rules, { scheme: 'dark' }).css;
-    return { status: 'ok', warnings, styles: { css, cssLight, cssDark, fontFaceCss, fontLinks }, candidates, stats };
+    // Seuls les groupes utilisés par un candidat retenu sont sérialisés. Une feuille = un morceau
+    // (séparé par CSS_CHUNK_SEP) : le build dédoublonne les feuilles communes entre groupes.
+    const memo = new Map();
+    const chunk = (id, scheme) => {
+      const k = `${id}:${scheme}`;
+      if (!memo.has(k)) memo.set(k, serializeScoped(sheetRules[id], { scheme, shellReset: false }));
+      return memo.get(k);
+    };
+    const styleGroups = {};
+    for (const gid of new Set(candidates.map((c) => c.styleGroup))) {
+      const g = groups.get(gid);
+      const join = (scheme) => [...g.sheets.map((id) => chunk(id, scheme).css).filter(Boolean), SHELL_RESET_CSS].join(CSS_CHUNK_SEP);
+      styleGroups[gid] = { css: join('auto'), cssLight: join('light'), cssDark: join('dark'),
+        fontFaceCss: [...new Set(g.sheets.map((id) => chunk(id, 'auto').fontFaceCss).filter(Boolean))].join(''), fontLinks: g.fontLinks };
+    }
+    stats.styleGroups = Object.keys(styleGroups).length;
+    return { status: 'ok', warnings, styleGroups, styles: styleGroups[candidates[0]?.styleGroup] ?? emptyStyles(), candidates, stats };
   } catch (e) {
     return fail(firstLine(e.message));
   } finally {

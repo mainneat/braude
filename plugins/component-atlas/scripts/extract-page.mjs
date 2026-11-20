@@ -141,7 +141,11 @@ export async function extractRendered(load, { maxCandidates = 150, timeoutMs = 2
       return false;
     });
     const res = ok({ css, cssLight, cssDark, fontFaceCss, fontLinks }, candidates);
-    if (keepRules) res.rules = raw.rules;
+    if (keepRules) {
+      res.rules = raw.rules;
+      let at = 0;
+      res.sheets = (raw.sheetSizes ?? [raw.rules.length]).map((n) => raw.rules.slice(at, (at += n)));
+    }
     return res;
   } catch (e) {
     return fail(firstLine(e.message));

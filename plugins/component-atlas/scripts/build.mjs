@@ -9,6 +9,7 @@ import { componentKey } from './lib/hash.mjs';
 import { validateClassified } from './lib/schema.mjs';
 import { TAXONOMY, autoType } from './lib/taxonomy.mjs';
 import { bundleScripts } from './lib/inline.mjs';
+import { CSS_CHUNK_SEP } from './lib/css.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.join(HERE, '..', 'seed', 'projects.louis.json');
@@ -43,11 +44,14 @@ export function assertSize(data, json) {
   if (size <= MAX_DATA) return size;
   const per = data.artifacts.map((a) => {
     let n = 0;
-    const st = data.styles[a.id];
-    if (st) {
+    const chunks = new Set();
+    for (const [sid, st] of Object.entries(data.styles)) {
+      if (sid !== a.id && !sid.startsWith(`${a.id}:`)) continue;
       n += (st.cssLight || '').length + (st.cssDark || '').length;
+      for (const c of [...(st.light || []), ...(st.dark || [])]) chunks.add(c);
       for (const f of st.fontIds || []) n += (data.fonts[f] || '').length;
     }
+    for (const c of chunks) n += (data.css?.[c] || '').length;
     for (const c of data.components) if (c.artifactId === a.id) n += c.html.length;
     return { title: a.title, n };
   }).sort((x, y) => y.n - x.n).slice(0, 5);
@@ -72,7 +76,9 @@ export async function buildData({ dir, now }) {
   const ordered = inventory.filter((a) => !removed.has(a.id))
     .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0));
 
-  const data = { generatedAt: now, taxonomy: TAXONOMY, artifacts: [], styles: {}, fonts: {}, components: [], notes: [] };
+  // styles : { '<artifactId>:<groupe>': { light:[idCss…], dark:[idCss…], fontIds, fontLinks } } ;
+  // css : { idCss: texte } — une feuille source par morceau, partagée entre groupes et artifacts.
+  const data = { generatedAt: now, taxonomy: TAXONOMY, artifacts: [], styles: {}, css: {}, fonts: {}, components: [], notes: [] };
   const byKey = new Map();
 
   for (const inv of ordered) {
@@ -97,19 +103,28 @@ export async function buildData({ dir, now }) {
 
     if (!projects[inv.id]) { projects[inv.id] = classified.project; entry.project = classified.project; }
 
-    const styles = await loadJson(path.join(raw, 'styles.json'), {});
-    const fontIds = [];
-    for (const rule of splitFontFaces(styles.fontFaceCss)) {
-      if (rule.length > MAX_FACE) {
-        const note = `Police ${faceFamily(rule)} retirée (trop lourde) — ${entry.title}`;
-        if (!data.notes.includes(note)) data.notes.push(note);
-        continue;
+    const stored = await loadJson(path.join(raw, 'styles.json'), {});
+    const groups = stored && stored.groups && typeof stored.groups === 'object' ? stored.groups : { main: stored || {} };
+    const firstGroup = Object.keys(groups)[0] ?? 'main';
+    const chunkIds = (css) => String(css ?? '').split(CSS_CHUNK_SEP).filter(Boolean).map((t) => {
+      const id = sha1(t).slice(0, 16);
+      data.css[id] = t;
+      return id;
+    });
+    for (const [gid, st] of Object.entries(groups)) {
+      const fontIds = [];
+      for (const rule of splitFontFaces(st.fontFaceCss)) {
+        if (rule.length > MAX_FACE) {
+          const note = `Police ${faceFamily(rule)} retirée (trop lourde) — ${entry.title}`;
+          if (!data.notes.includes(note)) data.notes.push(note);
+          continue;
+        }
+        const id = sha1(rule);
+        data.fonts[id] = rule;
+        if (!fontIds.includes(id)) fontIds.push(id);
       }
-      const id = sha1(rule);
-      data.fonts[id] = rule;
-      if (!fontIds.includes(id)) fontIds.push(id);
+      data.styles[`${inv.id}:${gid}`] = { light: chunkIds(st.cssLight), dark: chunkIds(st.cssDark), fontLinks: st.fontLinks ?? [], fontIds };
     }
-    data.styles[inv.id] = { cssLight: styles.cssLight ?? '', cssDark: styles.cssDark ?? '', fontLinks: styles.fontLinks ?? [], fontIds };
 
     const items = new Map(classified.items.map((it) => [it.index, it]));
     for (const c of cands) {
@@ -124,7 +139,8 @@ export async function buildData({ dir, now }) {
       entry.componentCount++;
       let comp = byKey.get(key);
       if (!comp) {
-        comp = { key, type, name, project: entry.project, isDS: c.kind === 'ds', sources: [], occurrences: 0, artifactId: inv.id, html: c.html, metrics: c.metrics, colors: c.colors || [] };
+        const styleId = `${inv.id}:${groups[c.styleGroup] ? c.styleGroup : firstGroup}`;
+        comp = { key, type, name, project: entry.project, isDS: c.kind === 'ds', sources: [], occurrences: 0, artifactId: inv.id, styleId, html: c.html, metrics: c.metrics, colors: c.colors || [] };
         if (c.description) comp.description = c.description;
         if (measure) comp.measureOnly = true;
         byKey.set(key, comp);

@@ -66,6 +66,28 @@ function injectFonts(styles, fonts) {
   }
 }
 
+const RESOLVED = new WeakMap(); // data → Map(styleId → styles résolus)
+
+/**
+ * Styles d'un composant : data.styles[comp.styleId] ({light,dark: ids de data.css, fontIds, fontLinks}),
+ * reconstitués en {cssLight, cssDark, fontIds, fontLinks}. Repli : ancien format par artifact
+ * (data.styles[comp.artifactId] = {cssLight, cssDark…}). Objet mémorisé : une feuille par groupe.
+ */
+export function stylesOf(data, comp) {
+  if (!data || !comp) return {};
+  let memo = RESOLVED.get(data);
+  if (!memo) { memo = new Map(); RESOLVED.set(data, memo); }
+  const id = comp.styleId && data.styles && data.styles[comp.styleId] ? comp.styleId : comp.artifactId;
+  if (memo.has(id)) return memo.get(id);
+  const st = (data.styles && data.styles[id]) || {};
+  const join = (ids) => (ids || []).map((i) => (data.css && data.css[i]) || '').join('\n');
+  const out = Array.isArray(st.light) || Array.isArray(st.dark)
+    ? { cssLight: join(st.light), cssDark: join(st.dark), fontIds: st.fontIds || [], fontLinks: st.fontLinks || [] }
+    : st;
+  memo.set(id, out);
+  return out;
+}
+
 const DROP_TAGS = 'script,iframe,object,embed,frame,frameset,base,meta,link,noscript';
 
 // Snapshot inerte : aucun script ni gestionnaire d'événement de l'artifact ne s'exécute.

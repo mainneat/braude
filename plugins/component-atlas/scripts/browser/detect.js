@@ -290,6 +290,7 @@
     const fontLinks = [];
     const addLink = (href) => { if (href && !fontLinks.includes(href)) fontLinks.push(href); };
     const rules = [];
+    const sheetSizes = []; // nombre de nœuds de premier niveau par feuille (découpe par feuille)
     for (const sheet of [...document.styleSheets, ...(document.adoptedStyleSheets || [])]) {
       const owner = sheet.ownerNode;
       if (owner && owner.hasAttribute && owner.hasAttribute(INTERNAL)) continue;
@@ -298,11 +299,13 @@
       try { list = sheet.cssRules; } catch { addLink(sheet.href); continue; }
       const children = walkRules(list, addLink);
       const mq = sheet.media && sheet.media.mediaText;
-      rules.push(...(mq && mq !== 'all' ? [{ type: 'media', condition: mq, children }] : children));
+      const nodes = mq && mq !== 'all' ? [{ type: 'media', condition: mq, children }] : children;
+      rules.push(...nodes);
+      sheetSizes.push(nodes.length);
     }
     // <link> qui n'a pas chargé (réseau) : gardé en lien.
     for (const l of document.querySelectorAll('link[rel~="stylesheet"][href]')) if (!l.sheet) addLink(l.href);
-    return { rules, fontLinks };
+    return { rules, fontLinks, sheetSizes };
   }
 
   // Les transitions fausseraient la mesure juste après le passage en sombre.
@@ -320,8 +323,8 @@
     paths = [];
     bgCache.clear();
     freeze();
-    const { rules, fontLinks } = collectRules();
-    if (!document.body) return { candidates: [], rules, fontLinks };
+    const { rules, fontLinks, sheetSizes } = collectRules();
+    if (!document.body) return { candidates: [], rules, fontLinks, sheetSizes };
 
     const all = visibleElements();
     const visibleSet = new Set(all);
@@ -386,7 +389,7 @@
         ...(e.localName === 'input' ? { inputType: e.type } : {}),
       });
     }
-    return { candidates, rules, fontLinks };
+    return { candidates, rules, fontLinks, sheetSizes };
   };
 
   window.__caMeasure = () => els.map((el, i) => {

@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { launch } from '../scripts/lib/browser.mjs';
 import { extractDesign } from '../scripts/extract-design.mjs';
 import { renderContactSheet } from '../scripts/extract-page.mjs';
+import { SHELL_RESET_CSS, CSS_CHUNK_SEP } from '../scripts/lib/css.mjs';
 
 const FX = fileURLToPath(new URL('./fixtures/design', import.meta.url));
 let browser;
@@ -39,6 +40,8 @@ test('context is prefixed by the artboard title from canvas.json', () => {
   assert.ok(res.candidates.every((c) => c.context.length <= 80));
 });
 
+const groupOf = (c) => res.styleGroups[c.styleGroup];
+
 test('shared CSS and embedded DS tokens reach the render', () => {
   const pill = res.candidates.find((c) => /pill/.test(c.html) && c.tag === 'button');
   assert.equal(pill.metrics.light.bg, '#2f6bff');
@@ -46,9 +49,38 @@ test('shared CSS and embedded DS tokens reach the render', () => {
   const card = res.candidates.find((c) => c.kind === 'card');
   assert.equal(card.metrics.light.bg, '#ffffff');
   assert.equal(card.metrics.dark.bg, '#1c1c1e');
-  assert.match(res.styles.css, /\.pill/);
-  assert.match(res.styles.css, /\.switch/);
-  assert.match(res.styles.cssDark, /#1c1c1e/);
+  assert.match(groupOf(pill).css, /\.pill/);
+  assert.match(groupOf(card).css, /\.switch/);
+  assert.match(groupOf(card).cssDark, /#1c1c1e/);
+});
+
+test('styles are kept per style group: no cross-board collision', () => {
+  const chips = res.candidates.filter((c) => /chip/.test(c.html) && c.tag === 'button');
+  assert.equal(chips.length, 2);
+  assert.equal(chips[0].styleGroup, chips[1].styleGroup, 'identical stylesheets share a group');
+  assert.equal(chips[0].metrics.light.bg, '#ff7a3d');
+  const pill = res.candidates.find((c) => /pill/.test(c.html) && c.tag === 'button');
+  assert.notEqual(pill.styleGroup, chips[0].styleGroup);
+  assert.doesNotMatch(groupOf(pill).cssLight, /#ff7a3d/, 'alt.css does not leak into the pill group');
+  assert.match(groupOf(chips[0]).cssLight, /#ff7a3d/);
+  for (const g of Object.values(res.styleGroups)) {
+    assert.ok(g.cssLight.endsWith(SHELL_RESET_CSS) && g.cssDark.endsWith(SHELL_RESET_CSS));
+    assert.ok(g.cssLight.includes(CSS_CHUNK_SEP), 'one chunk per source sheet');
+  }
+  assert.ok(res.candidates.every((c) => res.styleGroups[c.styleGroup]));
+  assert.equal(res.stats.styleGroups, Object.keys(res.styleGroups).length);
+});
+
+test('repeated artboard titles get the file stem', () => {
+  const ctx = res.candidates.filter((c) => /chip/.test(c.html)).map((c) => c.context).sort();
+  assert.match(ctx[0], /^States \(b-alt-1\)/);
+  assert.match(ctx[1], /^States \(b-alt-2\)/);
+  const pill = res.candidates.find((c) => /pill/.test(c.html) && c.tag === 'button');
+  assert.match(pill.context, /^Pill button(?! \()/);
+});
+
+test('artboard stats count unmounted boards apart from failed ones', () => {
+  assert.deepEqual(res.stats.artboards, { total: 6, rendered: 4, notMounted: 1, failed: 1, skipped: 0 });
 });
 
 test('broken or missing artboards become warnings, others continue', () => {
@@ -108,6 +140,13 @@ test('CLI writes the same files as the other extractors', () => {
     assert.ok(summary.artboards, 'artboard stats in summary');
     for (const f of ['candidates.json', 'styles.json', 'extract.json', 'contact.png']) assert.ok(existsSync(join(d, f)), f);
     assert.ok(!readdirSync(d).includes('contact-9.png'), 'stale contact sheets removed');
-    assert.ok(JSON.parse(readFileSync(join(d, 'candidates.json'), 'utf8')).length >= 4);
+    const cands = JSON.parse(readFileSync(join(d, 'candidates.json'), 'utf8'));
+    assert.ok(cands.length >= 4);
+    const styles = JSON.parse(readFileSync(join(d, 'styles.json'), 'utf8'));
+    assert.ok(cands.every((c) => styles.groups[c.styleGroup]), 'every candidate points to a written style group');
+    assert.ok(Object.keys(styles.groups).length >= 2);
+    const map = JSON.parse(readFileSync(join(d, 'contact.json'), 'utf8'));
+    assert.equal(map[0].file, 'contact.png');
+    assert.equal(summary.blankTiles, 0, JSON.stringify(summary.warnings));
   } finally { rmSync(d, { recursive: true, force: true }); }
 });

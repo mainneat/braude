@@ -199,3 +199,19 @@ test('colorPoints order: neutrals first (light to dark), then by hue', () => {
   assert.deepEqual(colorPoints(xs, 'light').map((p) => p.hex),
     ['#ffffff', '#fafafa', '#000000', '#ff0000', '#800000', '#00ff00', '#2f6bff']);
 });
+
+test('stylesOf resolves per-group chunked styles, with legacy per-artifact fallback', async () => {
+  const { stylesOf } = await import('../gallery/src/tile.mjs');
+  const data = {
+    css: { c1: '.btn{color:red}', c2: ':host{--a:1}', c3: ':host{--a:2}' },
+    styles: { 'x:g1': { light: ['c1', 'c2'], dark: ['c1'], fontIds: ['f'], fontLinks: [] }, 'x:g2': { light: ['c1', 'c3'], dark: [], fontIds: [], fontLinks: [] },
+      old: { cssLight: '.o{}', cssDark: '.p{}' } },
+  };
+  const a = stylesOf(data, { artifactId: 'x', styleId: 'x:g1' });
+  assert.equal(a.cssLight, '.btn{color:red}\n:host{--a:1}');
+  assert.equal(a.cssDark, '.btn{color:red}');
+  assert.deepEqual(a.fontIds, ['f']);
+  assert.equal(stylesOf(data, { artifactId: 'x', styleId: 'x:g1' }), a, 'memoised: one sheet per group');
+  assert.match(stylesOf(data, { artifactId: 'x', styleId: 'x:g2' }).cssLight, /--a:2/);
+  assert.equal(stylesOf(data, { artifactId: 'old' }).cssLight, '.o{}');
+});

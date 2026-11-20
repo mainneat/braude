@@ -147,6 +147,10 @@ export const SHELL_RESET_CSS = '[data-ca-shell]{display:block!important;position
   + 'max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;transform:none!important;'
   + 'overflow:visible!important;grid-area:auto!important}';
 
+// Séparateur de morceaux (une feuille source par morceau) dans un CSS de groupe de styles :
+// build.mjs découpe dessus pour dédoublonner les feuilles communes entre groupes.
+export const CSS_CHUNK_SEP = '\n/*ca:chunk*/\n';
+
 // RuleNode = {type:'style',selector,body} | {type:'media'|'supports'|'container',condition,children}
 //          | {type:'layer',name,children} | {type:'font-face',cssText} | {type:'keyframes'|'other',cssText}
 // opts.scheme : 'auto' (défaut, media intactes) | 'light' | 'dark' (prefers-color-scheme résolu).

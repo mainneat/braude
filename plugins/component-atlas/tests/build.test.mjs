@@ -121,7 +121,7 @@ test('invalid classified.json marks artifact error, others survive', async () =>
   assert.equal(by.boom.status, 'error');
   assert.equal(by.boom.note, 'Page plantée');
   assert.equal(data.components.length, 1);
-  assert.equal(data.styles.bad, undefined);
+  assert.equal(data.styles['bad:main'], undefined);
 });
 
 test('other-type artifact is listed as skipped with 0 components', async () => {
@@ -139,7 +139,9 @@ test('warnings carried and styles shaped without auto css', async () => {
   ]);
   const data = await buildData({ dir, now: 'N' });
   assert.deepEqual(data.artifacts[0].warnings, ['CDN KO']);
-  assert.deepEqual(Object.keys(data.styles.a).sort(), ['cssDark', 'cssLight', 'fontIds', 'fontLinks']);
+  assert.deepEqual(Object.keys(data.styles['a:main']).sort(), ['dark', 'fontIds', 'fontLinks', 'light']);
+  assert.deepEqual(data.styles['a:main'].light.map((i) => data.css[i]), ['.a{}']);
+  assert.equal(data.components[0].styleId, 'a:main');
 });
 
 test('projects.json manual edits are preserved and new ones written', async () => {
@@ -190,9 +192,9 @@ test('fonts deduped by hash and oversized faces dropped with a note', async () =
   ]);
   const data = await buildData({ dir, now: 'N' });
   assert.equal(Object.keys(data.fonts).length, 1);
-  assert.equal(data.styles.a.fontIds.length, 1);
-  assert.deepEqual(data.styles.a.fontIds, data.styles.b.fontIds);
-  assert.deepEqual(data.styles.a.fontLinks, styles.fontLinks);
+  assert.equal(data.styles['a:main'].fontIds.length, 1);
+  assert.deepEqual(data.styles['a:main'].fontIds, data.styles['b:main'].fontIds);
+  assert.deepEqual(data.styles['a:main'].fontLinks, styles.fontLinks);
   assert.ok(data.notes.includes('Police Mainneat Grotesk retirée (trop lourde) — T a'));
 });
 
@@ -204,7 +206,7 @@ test('splitFontFaces is brace-aware', () => {
 
 test('assertSize refuses data.json over 15 MB and lists biggest artifacts', () => {
   const data = { artifacts: [{ id: 'a', title: 'Big' }], styles: {}, fonts: { f: 'x'.repeat(16 * 1024 * 1024) }, components: [] };
-  data.styles.a = { fontIds: ['f'] };
+  data.styles['a:main'] = { fontIds: ['f'] };
   assert.throws(() => assertSize(data, JSON.stringify(data)), /15 Mo[\s\S]*Big/);
 });
 
@@ -213,4 +215,24 @@ test('0 candidates without classified.json is ok and empty', async () => {
   const data = await buildData({ dir, now: 'N' });
   assert.equal(data.artifacts[0].status, 'ok');
   assert.equal(data.components.length, 0);
+});
+
+test('style groups: one style entry per group, chunks shared, components point to their group', async () => {
+  const SEP = '\n/*ca:chunk*/\n';
+  const common = '.btn{color:red}';
+  const styles = { groups: {
+    g1: { css: '', cssLight: [common, ':host{--a:1}'].join(SEP), cssDark: common, fontFaceCss: '', fontLinks: [] },
+    g2: { css: '', cssLight: [common, ':host{--a:2}'].join(SEP), cssDark: common, fontFaceCss: '', fontLinks: [] },
+  } };
+  const dir = await setup(async (d) => [
+    await art(d, 'x', { kind: 'design', styles, cands: [cand(0, '<button>A</button>', { styleGroup: 'g1' }), cand(1, '<button>B</button>', { styleGroup: 'g2' })],
+      classified: ok('P', [{ index: 0, keep: true, type: 'button', name: 'A' }, { index: 1, keep: true, type: 'button', name: 'B' }]) }),
+  ]);
+  const data = await buildData({ dir, now: 'N' });
+  assert.deepEqual(Object.keys(data.styles).sort(), ['x:g1', 'x:g2']);
+  assert.equal(data.styles['x:g1'].light[0], data.styles['x:g2'].light[0], 'common sheet stored once');
+  assert.notEqual(data.styles['x:g1'].light[1], data.styles['x:g2'].light[1]);
+  assert.equal(Object.keys(data.css).length, 3);
+  assert.equal(data.components.find((c) => c.name === 'A').styleId, 'x:g1');
+  assert.equal(data.components.find((c) => c.name === 'B').styleId, 'x:g2');
 });

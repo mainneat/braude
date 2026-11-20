@@ -1,7 +1,7 @@
 // Construction du DOM des vues (Par type, fiche, non analysés). Aucun état global ici :
 // tout passe par `ctx` = { data, byArtifact, renderTheme, ... } fourni par main.mjs.
 // Concaténé dans index.html par build.mjs : noms de premier niveau uniques entre modules.
-import { mountSnippet, setSnippetTheme, pageScheme } from './tile.mjs';
+import { mountSnippet, setSnippetTheme, pageScheme, stylesOf } from './tile.mjs';
 import {
   groupByTypeThenProject, typeLabel, formatDate, matrixCounts, seqStep, colorPoints, metricSeries, contrastRatio, NEUTRAL_S,
 } from './logic.mjs';
@@ -28,7 +28,7 @@ export const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 const px = (n) => (Number.isFinite(n) ? `${Math.round(n)}` : '–');
 
 function mountTile(host, comp, ctx, theme) {
-  mountSnippet(host, { html: comp.html, styles: ctx.data.styles[comp.artifactId], fonts: ctx.data.fonts, theme });
+  mountSnippet(host, { html: comp.html, styles: stylesOf(ctx.data, comp), fonts: ctx.data.fonts, theme });
 }
 
 // Aperçu des tuiles : le composant est mis en page à sa largeur naturelle puis réduit
@@ -196,7 +196,7 @@ export function renderDetail(container, comp, ctx) {
     return;
   }
   const art = ctx.byArtifact.get(comp.artifactId);
-  const styles = ctx.data.styles[comp.artifactId] || {};
+  const styles = stylesOf(ctx.data, comp);
   let theme = ctx.renderTheme;
   const scheme = () => (theme === 'auto' ? pageScheme() : theme);
   const cssFor = () => (scheme() === 'dark' ? styles.cssDark : styles.cssLight) || '';
