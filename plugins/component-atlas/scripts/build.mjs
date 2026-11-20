@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { loadJson, saveJson } from './lib/cache.mjs';
+import { componentKey } from './lib/hash.mjs';
+import { validateClassified } from './lib/schema.mjs';
+import { TAXONOMY } from './lib/taxonomy.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SEED = path.join(HERE, '..', 'seed', 'projects.louis.json');
+const MAX_FACE = 2_000_000;
+const MAX_DATA = 15 * 1024 * 1024;
+const sha1 = (s) => createHash('sha1').update(s).digest('hex');
+
+/** Split a CSS string into individual @font-face rules (brace- and string-aware). */
+export function splitFontFaces(css) {
+  const out = [];
+  const s = String(css || '');
+  let i = 0;
+  while ((i = s.indexOf('@font-face', i)) !== -1) {
+    let depth = 0, j = i, quote = null, started = false;
+    for (; j < s.length; j++) {
+      const ch = s[j];
+      if (quote) { if (ch === '\\') j++; else if (ch === quote) quote = null; continue; }
+      if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === '{') { depth++; started = true; }
+      else if (ch === '}' && --depth === 0 && started) { j++; break; }
+    }
+    out.push(s.slice(i, j).trim());
+    i = j;
+  }
+  return out;
+}
+
+const faceFamily = (rule) => (/font-family\s*:\s*(?:"([^"]*)"|'([^']*)'|([^;}]+))/i.exec(rule) || []).slice(1).find(Boolean)?.trim() || 'inconnue';
+
+export function assertSize(data, json) {
+  const size = Buffer.byteLength(json);
+  if (size <= MAX_DATA) return size;
+  const per = data.artifacts.map((a) => {
+    let n = 0;
+    const st = data.styles[a.id];
+    if (st) {
+      n += (st.cssLight || '').length + (st.cssDark || '').length;
+      for (const f of st.fontIds || []) n += (data.fonts[f] || '').length;
+    }
+    for (const c of data.components) if (c.artifactId === a.id) n += c.html.length;
+    return { title: a.title, n };
+  }).sort((x, y) => y.n - x.n).slice(0, 5);
+  throw new Error(`data.json dépasse 15 Mo (${(size / 1048576).toFixed(1)} Mo). Plus gros artifacts :\n` +
+    per.map((p) => `  - ${p.title} (~${(p.n / 1048576).toFixed(1)} Mo)`).join('\n'));
+}
+
+export async function buildData({ dir, now }) {
+  const inventory = await loadJson(path.join(dir, 'inventory.json'), []);
+  const plan = await loadJson(path.join(dir, 'plan.json'), { toProcess: [], removed: [], unchanged: [] });
+  const cache = await loadJson(path.join(dir, 'cache.json'), { galleryUrl: null, artifacts: {} });
+  const removed = new Set(plan.removed || []);
+  const invIds = new Set(inventory.map((a) => a.id));
+
+  const projFile = path.join(dir, 'projects.json');
+  let projects = await loadJson(projFile, null);
+  if (projects === null) {
+    const seed = await loadJson(SEED, {});
+    projects = Object.fromEntries(Object.entries(seed).filter(([id]) => invIds.has(id)));
+  }
+
+  const ordered = inventory.filter((a) => !removed.has(a.id))
+    .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0));
+
+  const data = { generatedAt: now, taxonomy: TAXONOMY, artifacts: [], styles: {}, fonts: {}, components: [], notes: [] };
+  const byKey = new Map();
+
+  for (const inv of ordered) {
+    const raw = path.join(dir, 'raw', inv.id);
+    const meta = await loadJson(path.join(raw, 'meta.json'), null);
+    if (!meta) continue;
+    const entry = { id: inv.id, url: meta.url ?? inv.url, title: meta.title ?? inv.title, updated: inv.updated, project: projects[inv.id] || 'Sans projet', kind: meta.kind, status: 'ok', componentCount: 0, warnings: [] };
+    data.artifacts.push(entry);
+    const fail = (note) => { entry.status = 'error'; entry.note = note; };
+
+    if (meta.kind === 'other-type') { entry.status = 'skipped'; entry.note = `Type ${meta.typeName ?? 'inconnu'} non analysé`; continue; }
+    const extract = await loadJson(path.join(raw, 'extract.json'), null);
+    entry.warnings = extract?.warnings ?? [];
+    if (!extract) { fail('Extraction manquante'); continue; }
+    if (extract.status === 'error') { fail(extract.error || 'Extraction en erreur'); continue; }
+    const cands = await loadJson(path.join(raw, 'candidates.json'), []);
+    const classified = await loadJson(path.join(raw, 'classified.json'), null).catch(() => undefined);
+    if (classified === null || classified === undefined) { fail('Classification manquante'); continue; }
+    const errs = validateClassified(classified, cands.length);
+    if (errs.length) { fail(errs.join(' ; ')); continue; }
+
+    if (!projects[inv.id]) { projects[inv.id] = classified.project; entry.project = classified.project; }
+
+    const styles = await loadJson(path.join(raw, 'styles.json'), {});
+    const fontIds = [];
+    for (const rule of splitFontFaces(styles.fontFaceCss)) {
+      if (rule.length > MAX_FACE) {
+        const note = `Police ${faceFamily(rule)} retirée (trop lourde) — ${entry.title}`;
+        if (!data.notes.includes(note)) data.notes.push(note);
+        continue;
+      }
+      const id = sha1(rule);
+      data.fonts[id] = rule;
+      if (!fontIds.includes(id)) fontIds.push(id);
+    }
+    data.styles[inv.id] = { cssLight: styles.cssLight ?? '', cssDark: styles.cssDark ?? '', fontLinks: styles.fontLinks ?? [], fontIds };
+
+    const items = new Map(classified.items.map((it) => [it.index, it]));
+    for (const c of cands) {
+      const it = items.get(c.index);
+      const measure = !!c.measureOnly;
+      if (!measure && !(it && it.keep)) continue;
+      const name = (c.kind === 'ds' && c.presetName) || (it && it.name) || c.presetName || c.text || 'Mesure';
+      const type = (it && it.type) || 'other';
+      const key = componentKey(c.html, c.metrics.light);
+      const occ = c.occurrences || 1;
+      entry.componentCount++;
+      let comp = byKey.get(key);
+      if (!comp) {
+        comp = { key, type, name, project: entry.project, isDS: c.kind === 'ds', sources: [], occurrences: 0, artifactId: inv.id, html: c.html, metrics: c.metrics, colors: c.colors || [] };
+        if (c.description) comp.description = c.description;
+        if (measure) comp.measureOnly = true;
+        byKey.set(key, comp);
+        data.components.push(comp);
+      } else {
+        if (c.kind === 'ds') comp.isDS = true;
+        if (!comp.description && c.description) comp.description = c.description;
+        if (!measure) delete comp.measureOnly;
+      }
+      comp.occurrences += occ;
+      const src = comp.sources.find((s) => s.artifactId === inv.id);
+      if (src) src.occurrences += occ; else comp.sources.push({ artifactId: inv.id, occurrences: occ });
+    }
+  }
+
+  await saveJson(projFile, projects);
+  const artifacts = {};
+  for (const a of data.artifacts) artifacts[a.id] = { updated: a.updated, status: a.status };
+  await saveJson(path.join(dir, 'cache.json'), { ...cache, artifacts });
+  return data;
+}
+
+/** Hook for Task 7: inlines the gallery into dist/index.html. No-op if the template is absent. */
+export async function writeGallery(distDir) {
+  const tpl = path.join(HERE, '..', 'gallery', 'index.template.html');
+  try { await fs.access(tpl); } catch { return false; }
+  return false; // Task 7 provides the inlining
+}
+
+async function main() {
+  const i = process.argv.indexOf('--dir');
+  const dir = i > -1 && process.argv[i + 1] ? process.argv[i + 1] : '.component-atlas';
+  const data = await buildData({ dir, now: new Date().toISOString() });
+  const json = JSON.stringify(data);
+  assertSize(data, json);
+  const dist = path.join(dir, 'dist');
+  await fs.mkdir(dist, { recursive: true });
+  await fs.writeFile(path.join(dist, 'data.json'), json);
+  await writeGallery(dist);
+  console.log(`data.json : ${data.artifacts.length} artifacts, ${data.components.length} composants, ${(Buffer.byteLength(json) / 1048576).toFixed(2)} Mo`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => { console.error(e.message); process.exit(1); });
+}
