@@ -287,7 +287,6 @@ test('matrix cell click filters the by-type view', async () => {
     assert.equal(await page.$eval('#f-type', (s) => s.value), 'button');
     assert.equal(await page.$eval('#f-project', (s) => s.value), 'Nimbus');
     assert.equal(await page.$$eval('.tile', (t) => t.length), nimbusButtons);
-    // Clavier : Entrée sur une case.
     // Retour à la matrice : les filtres globaux s'y appliquent aussi.
     await page.click('#tabs >> text=Matrice');
     await page.waitForSelector('.mx-cell');
@@ -309,6 +308,9 @@ test('swatches: one per distinct color, focus lists the components using it', as
     const distinct = new Set();
     for (const c of data.components) for (const k of ['bg', 'fg', 'border']) if (c.metrics.light[k]) distinct.add(c.metrics.light[k].toLowerCase());
     assert.equal(await page.$$eval('.sw-dot', (d) => d.length), distinct.size);
+    // Ordre du DOM (donc de tabulation) : celui du tableau, neutres puis teinte.
+    assert.deepEqual(await page.$$eval('.sw-dot', (d) => d.map((x) => x.dataset.hex)),
+      await page.$$eval('.viz-table tbody code', (c) => c.map((x) => x.textContent)));
     const blue = '.sw-dot[data-hex="#2f6bff"]';
     assert.equal(await page.$eval(blue, (el) => el.getAttribute('tabindex')), '0');
     await page.focus(blue);
@@ -335,6 +337,8 @@ test('metrics: strip plots for the selected type, hover shows previews', async (
     const strip = page.locator('.strip[data-metric="height"]');
     assert.match(await strip.textContent(), new RegExp(`${heights.size} valeurs différentes`));
     assert.equal(await strip.locator('.st-dot').count(), heights.size);
+    assert.deepEqual(await strip.locator('.st-dot').evaluateAll((d) => d.map((x) => Number(x.dataset.value))), [...heights].sort((a, b) => a - b),
+      'tab order follows the value');
     await strip.locator('.st-dot[data-value="32"]').hover();
     await page.waitForSelector(`.viz-detail a.specimen[href="#c-${KEY_PRIMARY}"] .tile`);
     assert.equal(await page.$$eval('.viz-detail .tile', (t) => t.length),

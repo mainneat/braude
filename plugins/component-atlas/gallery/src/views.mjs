@@ -3,7 +3,7 @@
 // Concaténé dans index.html par build.mjs : noms de premier niveau uniques entre modules.
 import { mountSnippet, setSnippetTheme, pageScheme } from './tile.mjs';
 import {
-  groupByTypeThenProject, typeLabel, formatDate, matrixCounts, seqStep, colorPoints, metricSeries, contrastRatio,
+  groupByTypeThenProject, typeLabel, formatDate, matrixCounts, seqStep, colorPoints, metricSeries, contrastRatio, NEUTRAL_S,
 } from './logic.mjs';
 
 /** h('div.a.b', {attr}, ...enfants) : chaînes → nœuds texte, null/false ignorés. */
@@ -404,7 +404,6 @@ export function renderMatrixView(container, components, ctx) {
 // ── Couleurs (nuancier) ──
 
 const HUE_TICKS = [[0, 'rouge'], [60, 'jaune'], [120, 'vert'], [180, 'cyan'], [240, 'bleu'], [300, 'magenta'], [360, 'rouge']];
-const NEUTRAL_S = 0.1;
 
 function swatchClasses(hex) {
   const cls = ['sw-mark'];
@@ -452,8 +451,8 @@ export function renderColorsView(container, components, ctx) {
     svg('text', { class: 'ax-title', x: M.l, y: H - 4, text: 'Luminosité ↑ · teinte →' }));
 
   const zone = detailZone(ctx, 'Survolez une pastille, ou parcourez-les au clavier, pour voir les composants qui l’utilisent.');
-  // Les plus grosses d'abord : les petites restent visibles au-dessus.
-  for (const p of [...points].sort((a, b) => b.keys.length - a.keys.length)) {
+  // Ordre du DOM = ordre de lecture et de tabulation (neutres, puis teinte, puis luminosité), comme le tableau.
+  for (const p of points) {
     const x = xOf(p);
     const y = yOf(p.l);
     const r = rOf(p.keys.length);
@@ -522,7 +521,7 @@ function stripPlot(container, ctx, metric, label, series, group) {
 
   const zone = detailZone(ctx, 'Survolez un point pour voir les composants qui ont cette valeur.', group);
   const extremes = new Set(scaled.length > 1 ? [scaled[0].value, scaled[scaled.length - 1].value] : []);
-  for (const s of [...series].sort((a, b) => b.keys.length - a.keys.length)) {
+  for (const s of series) { // par valeur croissante : ordre de tabulation de gauche à droite
     const x = pills.includes(s) ? pillX : xOf(s.value);
     const r = rOf(s.keys.length);
     const text = `${label} ${s.value} px, ${plural(s.keys.length, 'composant', 'composants')}`;

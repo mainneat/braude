@@ -119,6 +119,8 @@ export function typeLabel(taxonomy, slug) {
 // ── Vues de comparaison (Matrice, Couleurs, Mesures) ──────────────────────────
 
 const COLOR_ROLES = ['bg', 'fg', 'border'];
+/** Saturation sous laquelle la teinte n'a plus de sens (gris, blancs, noirs). */
+export const NEUTRAL_S = 0.1;
 
 /** Comptes type × projet des composants visibles (non measureOnly), pondérés par 1. */
 export function matrixCounts(components, taxonomy, projects) {
@@ -186,7 +188,7 @@ export function contrastRatio(a, b) {
 
 const themeMetrics = (c, theme) => (c.metrics && ((theme === 'dark' && c.metrics.dark) || c.metrics.light)) || null;
 
-/** Couleurs uniques (fond, texte, bordure) du thème, avec les clés des composants qui les utilisent. */
+/** Couleurs uniques (fond, texte, bordure) du thème, avec les clés des composants qui les utilisent, triées (voir plus bas). */
 export function colorPoints(components, theme) {
   const byHex = new Map();
   for (const c of components) {
@@ -199,8 +201,10 @@ export function colorPoints(components, theme) {
       byHex.get(hex).add(c.key);
     }
   }
+  // Ordre de lecture (et de tabulation) : neutres du clair au foncé, puis par teinte, puis du clair au foncé.
+  const neutral = (p) => (p.s < NEUTRAL_S ? 0 : 1);
   return [...byHex].map(([hex, keys]) => ({ hex, ...hexToHsl(hex), keys: [...keys] }))
-    .sort((a, b) => a.h - b.h || b.l - a.l);
+    .sort((a, b) => neutral(a) - neutral(b) || (neutral(a) ? a.h - b.h : 0) || b.l - a.l);
 }
 
 /** Valeurs distinctes (arrondies au px, triées) d'une mesure pour un type, measureOnly inclus. */

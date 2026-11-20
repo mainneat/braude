@@ -171,3 +171,31 @@ test('metricSeries groups rounded values', () => {
   assert.deepEqual(metricSeries(xs, 'button', 'radius'), [{ value: 0, keys: ['a', 'b', 'c'] }]);
   assert.deepEqual(metricSeries(xs, 'chip', 'height'), []);
 });
+
+test('matrix ramp: each step ink reaches 4.5:1 on its fill, in both themes', () => {
+  const tpl = readFileSync(new URL('../gallery/index.template.html', import.meta.url), 'utf8');
+  const blocks = [...tpl.matchAll(/(:root(?::not\(\[data-theme="light"\]\))?|:root\[data-theme="dark"\]) \{([^}]*)\}/g)].map((m) => m[2]);
+  assert.equal(blocks.length, 3, 'light :root, media dark, data-theme dark');
+  const ramp = (css) => [1, 2, 3, 4, 5].map((n) => ({
+    n, fill: (css.match(new RegExp(`--ca-seq-${n}: (#[0-9a-f]{6})`)) || [])[1], ink: (css.match(new RegExp(`--ca-seq-ink-${n}: (#[0-9a-f]{6})`)) || [])[1],
+  }));
+  const [light, dark, darkToggle] = blocks.map(ramp);
+  assert.deepEqual(dark, darkToggle, 'both dark blocks agree');
+  for (const [theme, steps] of [['light', light], ['dark', dark]]) {
+    for (const { n, fill, ink } of steps) {
+      assert.ok(fill && ink, `${theme} step ${n} defined`);
+      const r = contrastRatio(fill, ink);
+      assert.ok(r >= 4.5, `${theme} step ${n}: ${ink} on ${fill} = ${r.toFixed(2)}:1`);
+    }
+  }
+});
+
+test('colorPoints order: neutrals first (light to dark), then by hue', () => {
+  const xs = [
+    C('a', 'button', 'a', 'P', M({ bg: '#2f6bff', fg: '#ffffff' })),
+    C('b', 'button', 'b', 'P', M({ bg: '#ff0000', fg: '#000000', border: '#00ff00' })),
+    C('c', 'button', 'c', 'P', M({ bg: '#fafafa', fg: '#800000' })),
+  ];
+  assert.deepEqual(colorPoints(xs, 'light').map((p) => p.hex),
+    ['#ffffff', '#fafafa', '#000000', '#ff0000', '#800000', '#00ff00', '#2f6bff']);
+});
