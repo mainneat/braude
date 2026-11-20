@@ -64,15 +64,44 @@ test('keeps only keep:true items and uses DS preset names', async () => {
   assert.equal(data.artifacts[0].componentCount, 2);
 });
 
-test('measureOnly candidates are kept with classifier type or other', async () => {
+test('measureOnly candidates are typed by autoType, not by the classifier', async () => {
   const dir = await setup(async (d) => [
-    await art(d, 'a', { cands: [cand(0, '<b>1</b>', { measureOnly: true }), cand(1, '<b>2</b>', { measureOnly: true })], classified: ok('P', [{ index: 0, keep: true, type: 'chip', name: 'X' }]) }),
+    await art(d, 'a', { cands: [
+      cand(0, '<div class="ca-body"><button>1</button></div>', { measureOnly: true }),
+      cand(1, '<div class="ca-body"><input type="range"></div>', { measureOnly: true, tag: 'input' }),
+      cand(2, '<div class="ca-body"><b>2</b></div>', { measureOnly: true, kind: 'ds', tag: 'div' }),
+      cand(3, '<div class="ca-body"><button>V</button></div>'),
+    ], classified: ok('P', [{ index: 0, keep: true, type: 'chip', name: 'X' }, { index: 3, keep: true, type: 'chip', name: 'Visible' }]) }),
   ]);
   const data = await buildData({ dir, now: 'N' });
-  assert.equal(data.components.length, 2);
-  assert.equal(data.components.find((c) => c.name === 'X').type, 'chip');
-  assert.equal(data.components.find((c) => c.name !== 'X').type, 'other');
-  assert.ok(data.components.every((c) => c.measureOnly));
+  assert.equal(data.artifacts[0].status, 'ok', data.artifacts[0].note);
+  assert.equal(data.components.length, 4);
+  const m = data.components.filter((c) => c.measureOnly);
+  assert.equal(m.length, 3);
+  assert.equal(m.find((c) => c.name === 'X').type, 'button', 'classifier type ignored for measureOnly');
+  assert.ok(m.some((c) => c.type === 'slider'));
+  assert.ok(m.some((c) => c.type === 'other'));
+  assert.equal(data.components.find((c) => c.name === 'Visible').type, 'chip', 'classifier type kept for visible');
+});
+
+test('classification missing a non-measureOnly item marks the artifact in error', async () => {
+  const dir = await setup(async (d) => [
+    await art(d, 'a', { cands: [cand(0, '<b>1</b>'), cand(1, '<b>2</b>'), cand(2, '<b>3</b>', { measureOnly: true })],
+      classified: ok('P', [{ index: 0, keep: true, type: 'button', name: 'x' }]) }),
+  ]);
+  const data = await buildData({ dir, now: 'N' });
+  assert.equal(data.artifacts[0].status, 'error');
+  assert.match(data.artifacts[0].note, /1/);
+});
+
+test('design artifacts are built like pages', async () => {
+  const dir = await setup(async (d) => [
+    await art(d, 'g', { kind: 'design', typeName: 'Design', cands: [cand(0, '<button>Go</button>')], classified: ok('P', [{ index: 0, keep: true, type: 'button', name: 'Go' }]) }),
+  ]);
+  const data = await buildData({ dir, now: 'N' });
+  assert.equal(data.artifacts[0].status, 'ok');
+  assert.equal(data.artifacts[0].kind, 'design');
+  assert.equal(data.components.length, 1);
 });
 
 test('invalid classified.json marks artifact error, others survive', async () => {

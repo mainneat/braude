@@ -381,6 +381,8 @@
         context: contextOf(e, headings),
         html: open + snapshot(e) + close,
         metrics: measure(e),
+        ...(e.getAttribute('role') ? { role: e.getAttribute('role') } : {}),
+        ...(e.localName === 'input' ? { inputType: e.type } : {}),
       });
     }
     return { candidates, rules, fontLinks };

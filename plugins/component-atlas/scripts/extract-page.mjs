@@ -106,10 +106,10 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
       let d = dark ? normMetrics(dark[g.raw]) : g.light;
       if (!d) { missing++; d = g.light; }
       const colors = [...new Set([g.light.bg, g.light.fg, g.light.border, d.bg, d.fg, d.border].filter(Boolean))];
-      const { kind, tag, text, context: ctx, html: snippet } = g.c;
+      const { kind, tag, text, context: ctx, html: snippet, role, inputType } = g.c;
       const inner = wholeBody && g.raw > 0 ? { measureOnly: true, parentIndex: 0 } : {};
       return { index, kind, tag, text, context: ctx, html: snippet, occurrences: g.occurrences,
-        metrics: { light: g.light, dark: d }, colors, ...inner };
+        metrics: { light: g.light, dark: d }, colors, ...(role ? { role } : {}), ...(inputType ? { inputType } : {}), ...inner };
     });
 
     if (missing) note(`Thème sombre : ${missing} élément(s) introuvable(s) après le changement de thème, mesures claires reprises`);

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { loadJson, saveJson } from './lib/cache.mjs';
 import { componentKey } from './lib/hash.mjs';
 import { validateClassified } from './lib/schema.mjs';
-import { TAXONOMY } from './lib/taxonomy.mjs';
+import { TAXONOMY, autoType } from './lib/taxonomy.mjs';
 import { bundleScripts } from './lib/inline.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -92,7 +92,7 @@ export async function buildData({ dir, now }) {
     const classified = await loadJson(path.join(raw, 'classified.json'), null).catch(() => undefined);
     if ((classified === null || classified === undefined) && cands.length === 0) continue; // page sans composant : ok, vide
     if (classified === null || classified === undefined) { fail('Classification manquante'); continue; }
-    const errs = validateClassified(classified, cands.length);
+    const errs = validateClassified(classified, cands);
     if (errs.length) { fail(errs.join(' ; ')); continue; }
 
     if (!projects[inv.id]) { projects[inv.id] = classified.project; entry.project = classified.project; }
@@ -117,7 +117,8 @@ export async function buildData({ dir, now }) {
       const measure = !!c.measureOnly;
       if (!measure && !(it && it.keep)) continue;
       const name = (c.kind === 'ds' && c.presetName) || (it && it.name) || c.presetName || c.text || 'Mesure';
-      const type = (it && it.type) || 'other';
+      // measureOnly : jamais vu par le classifieur, type déduit du détecteur.
+      const type = measure ? autoType(c) : ((it && it.type) || 'other');
       const key = componentKey(c.html, c.metrics.light);
       const occ = c.occurrences || 1;
       entry.componentCount++;
