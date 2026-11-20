@@ -225,7 +225,7 @@
   }
 
   // outerHTML d'un clone : état des champs reporté en attributs, scripts retirés.
-  function snapshot(el) {
+  function snapshot(el, inner = false) {
     const clone = el.cloneNode(true);
     const FORM = 'input, textarea, option';
     const src = [...(el.matches(FORM) ? [el] : []), ...el.querySelectorAll(FORM)];
@@ -238,8 +238,8 @@
       else if (s.type === 'checkbox' || s.type === 'radio') s.checked ? d.setAttribute('checked', '') : d.removeAttribute('checked');
       else if (s.type !== 'file' && s.type !== 'password') d.setAttribute('value', s.value);
     });
-    clone.querySelectorAll('script').forEach((s) => s.remove());
-    return clone.outerHTML;
+    clone.querySelectorAll(inner ? 'script, style, link' : 'script').forEach((s) => s.remove());
+    return inner ? clone.innerHTML : clone.outerHTML;
   }
 
   function cssPath(el) {
@@ -315,7 +315,7 @@
   }
 
   // ---------- API ----------
-  window.__caDetect = (limit) => {
+  window.__caDetect = (limit, opts = {}) => {
     els = [];
     paths = [];
     bgCache.clear();
@@ -352,6 +352,21 @@
       : cards.has(e) ? 'card' : icons.has(e) ? 'icon' : null);
     const headings = [...document.querySelectorAll(HEADING)];
     const candidates = [];
+    if (opts.wholeBody) {
+      // Candidat 'ds' : tout le corps de l'aperçu ; mesuré sur son premier enfant visible.
+      const first = all.find((e) => e.parentElement === document.body) || document.body;
+      const [open, close] = shell(document.body);
+      els.push(first);
+      paths.push(cssPath(first));
+      candidates.push({
+        kind: 'ds',
+        tag: 'div',
+        text: textOf(document.body),
+        context: '',
+        html: open + snapshot(document.body, true) + close,
+        metrics: measure(first),
+      });
+    }
     for (const e of all) {
       const kind = kindOf(e);
       if (!kind) continue;

@@ -45,7 +45,7 @@ export async function extractPage(htmlPath, opts = {}) {
 // navigateur ou détection en échec). Erreurs JS, ressources injoignables, délais avec DOM
 // utilisable → 'ok' + warnings.
 // opts.contactPath (interne au CLI) : capture de la page avec les candidats numérotés.
-export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 20000, browser, contactPath } = {}) {
+export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 20000, browser, contactPath, wholeBody = false, badgeOffset = 0, keepRules = false } = {}) {
   const warnings = [];
   const note = (msg) => { if (!warnings.includes(msg)) warnings.push(msg); };
   const ok = (styles, candidates) => ({ status: 'ok', warnings, styles, candidates });
@@ -77,7 +77,7 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
     await run(settle, undefined, 'Stabilisation');
 
     const rawLimit = Math.max(RAW_LIMIT_MIN, maxCandidates * 20);
-    const raw = await run((n) => window.__caDetect(n), rawLimit, 'Détection');
+    const raw = await run((a) => window.__caDetect(a.n, { wholeBody: a.wholeBody }), { n: rawLimit, wholeBody }, 'Détection');
 
     // Dédoublonnage par componentKey AVANT le plafond, ordre de première apparition.
     const groups = new Map();
@@ -105,8 +105,9 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
       if (!d) { missing++; d = g.light; }
       const colors = [...new Set([g.light.bg, g.light.fg, g.light.border, d.bg, d.fg, d.border].filter(Boolean))];
       const { kind, tag, text, context: ctx, html: snippet } = g.c;
+      const inner = wholeBody && g.raw > 0 ? { measureOnly: true, parentIndex: 0 } : {};
       return { index, kind, tag, text, context: ctx, html: snippet, occurrences: g.occurrences,
-        metrics: { light: g.light, dark: d }, colors };
+        metrics: { light: g.light, dark: d }, colors, ...inner };
     });
 
     if (missing) note(`Thème sombre : ${missing} élément(s) introuvable(s) après le changement de thème, mesures claires reprises`);
@@ -115,7 +116,7 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
       try {
         await page.emulateMedia({ colorScheme: 'light' });
         await run(settle, undefined, 'Stabilisation');
-        await run((pairs) => window.__caBadges(pairs), kept.map((g, i) => [g.raw, i]), 'Badges');
+        await run((pairs) => window.__caBadges(pairs), kept.map((g, i) => [g.raw, i + badgeOffset]), 'Badges');
         const height = await run(() => document.documentElement.scrollHeight, undefined, 'Hauteur');
         await page.screenshot({ path: contactPath, fullPage: true, timeout: timeoutMs,
           ...(height > CONTACT_MAX_HEIGHT ? { clip: { x: 0, y: 0, width: VIEWPORT.width, height: CONTACT_MAX_HEIGHT } } : {}) });
@@ -132,7 +133,9 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
       note(`Feuille de style externe ignorée (illisible ou hors Google Fonts) : ${u}`);
       return false;
     });
-    return ok({ css, cssLight, cssDark, fontFaceCss, fontLinks }, candidates);
+    const res = ok({ css, cssLight, cssDark, fontFaceCss, fontLinks }, candidates);
+    if (keepRules) res.rules = raw.rules;
+    return res;
   } catch (e) {
     return fail(firstLine(e.message));
   } finally {
