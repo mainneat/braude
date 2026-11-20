@@ -27,23 +27,24 @@ Affiche `ok` si Node >= 18 et si Playwright + Chromium se lancent (résolution :
 Découpe `toProcess` en lots de 8 et lance un sous-agent par lot, **en parallèle** (plusieurs appels Agent dans le même message ; au plus ~6 à la fois). Prompt type, à adapter avec les ids/urls/titres/dates du lot :
 
 > Pour chaque artifact ci-dessous, fais ceci. Ne renvoie jamais de HTML ni de contenu de fichier : uniquement une ligne par artifact `id | kind | ok/erreur | note courte`.
-> 1. `Artifact list` avec `scope:"files"` et `url` → lis le résultat : une ligne d'en-tête `... an Artifact of type "<Nom du type>" ...` indique un artifact typé ; pour une page simple, le résultat est `none — single page with no separately published files`. Nature : typé + `"Design System"` → `design-system` ; typé avec un autre nom (ex. "Design", "Slides") → `other-type` avec `typeName` = ce nom ; `none — single page` → `page`. Si le résultat est inexploitable, repli : `Artifact read` avec `url` seul, dont l'en-tête dit "Created from the Artifact type <url>" (typé) ou "raw HTML follows" (page) ; le type Design System est `https://claude.ai/artifact/5M7UeXXcx16TP3vzVFNDzd`.
-> 2. Crée `D/raw/<id>/` et écris `D/raw/<id>/meta.json` = `{"id","url","title","updated","kind","typeName"?}` avec `kind` = `"page"`, `"design-system"` ou `"other-type"` (autre type d'artifact : Slides, Docs, Data, Design, Whiteboard, Sheets ; mets `typeName`). Pour `other-type`, rien d'autre.
+> 1. `Artifact list` avec `scope:"files"` et `url` → lis le résultat : une ligne d'en-tête `... an Artifact of type "<Nom du type>" ...` indique un artifact typé ; pour une page simple, le résultat est `none — single page with no separately published files`. Nature : typé + `"Design System"` → `design-system` ; en-tête `an Artifact of type "Design"` → `design` (canevas d'artboards `project/*.dc.html` + `project/canvas.json`) ; typé avec un autre nom (ex. "Slides", "Docs") → `other-type` avec `typeName` = ce nom ; `none — single page` → `page`. Si le résultat est inexploitable, repli : `Artifact read` avec `url` seul, dont l'en-tête dit "Created from the Artifact type <url>" (typé) ou "raw HTML follows" (page) ; le type Design System est `https://claude.ai/artifact/5M7UeXXcx16TP3vzVFNDzd`.
+> 2. Crée `D/raw/<id>/` et écris `D/raw/<id>/meta.json` = `{"id","url","title","updated","kind","typeName"?}` avec `kind` = `"page"`, `"design-system"`, `"design"` (mets `typeName:"Design"`) ou `"other-type"` (autre type d'artifact : Slides, Docs, Data, Whiteboard, Sheets ; mets `typeName`). Pour `other-type`, rien d'autre.
 > 3. Page : `Artifact read` avec `url`, `path:"index.html"`, `out_dir:"D/raw/<id>"` (chemin absolu), puis `node "<base>/../../scripts/extract-page.mjs" D/raw/<id>`.
 > 4. Design System : `Artifact read` avec `url` et `paths` = tous les fichiers listés sous `project/` sauf `project/assets/` (256 max par appel, découpe sinon), `out_dir:"D/raw/<id>"`, puis `node "<base>/../../scripts/extract-ds.mjs" D/raw/<id>`.
-> 5. Si une étape échoue (lecture, extraction), consigne `erreur` avec la raison en une ligne et passe au suivant : un artifact en échec ne doit jamais bloquer le lot.
+> 5. Design : `Artifact read` avec `url`, `out_dir:"D/raw/<id>"` et `paths` = tous les fichiers listés sous `project/` **sauf** les images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.mp4`) et les dossiers qui n'en contiennent que (ex. `project/audit/`), **plus** `artifact-type/dc-runtime.js` (indispensable : c'est le runtime qui résout gabarits, `{{…}}`, `<sc-for>`/`<sc-if>` et `<dc-import>` ; ne prends aucun autre fichier de `artifact-type/`). 256 chemins max par appel : découpe en plusieurs appels sinon. Puis `node "<base>/../../scripts/extract-design.mjs" D/raw/<id>` (une à trois minutes pour une centaine de planches).
+> 6. Si une étape échoue (lecture, extraction), consigne `erreur` avec la raison en une ligne et passe au suivant : un artifact en échec ne doit jamais bloquer le lot.
 
-Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` et `extract.json` dans `raw/<id>/`. Les artifacts `other-type` ou en erreur n'ont pas de classification.
+Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` (et `contact-2.png`, `contact-3.png`… quand la planche-contact est trop haute) et `extract.json` dans `raw/<id>/`. Les artifacts `other-type` ou en erreur n'ont pas de classification.
 
 ## 4. Classification (sous-agents)
 Seuls les artifacts `ok` qui ont un `candidates.json` non vide (sans candidat, ne classe rien : le build les accepte vides). Lots de 8, un sous-agent par lot, en parallèle. Prompt type :
 
 > Pour chaque artifact `<id>` du lot :
-> 1. Lis `D/raw/<id>/contact.png` avec l'outil Read (capture de la page).
-> 2. Lis une version compacte des candidats, jamais le HTML :
->    `node -e "const c=require('./D/raw/<id>/candidates.json');console.log(JSON.stringify(c.map(({index,kind,tag,text,context,presetName,occurrences})=>({index,kind,tag,text,context,presetName,occurrences}))))"`
+> 1. Lis `D/raw/<id>/contact.png` avec l'outil Read (tuiles numérotées par index), puis `contact-2.png`, `contact-3.png`… s'ils existent (`ls D/raw/<id>/contact*.png`) : lis-les tous.
+> 2. Lis une version compacte des candidats à classer, jamais le HTML ; les candidats `measureOnly` (mesures internes, typés automatiquement) sont exclus :
+>    `node -e "const c=require('./D/raw/<id>/candidates.json');console.log(JSON.stringify(c.filter(x=>!x.measureOnly).map(({index,kind,tag,role,text,context,presetName,occurrences})=>({index,kind,tag,role,text,context,presetName,occurrences}))))"`
 > 3. Lis les noms de projets existants : valeurs de `D/projects.json` s'il existe, sinon de `<base>/../../seed/projects.louis.json`.
-> 4. Écris `D/raw/<id>/classified.json` = `{"project":"…","items":[{"index":0,"keep":true,"type":"button","name":"…"}]}` avec **un item pour chaque index** de candidates.json.
+> 4. Écris `D/raw/<id>/classified.json` = `{"project":"…","items":[{"index":0,"keep":true,"type":"button","name":"…"}]}` avec **un item pour chaque index affiché à l'étape 2** (chaque candidat non `measureOnly`). Pour un artifact Design, `context` commence par le titre de la planche (artboard).
 >
 > Règles :
 > - `project` : réutilise un nom existant quand l'artifact en relève ; sinon un nom court nouveau.

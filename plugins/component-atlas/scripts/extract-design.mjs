@@ -101,6 +101,7 @@ export async function extractDesign(rawDir, opts = {}) {
   const seenRules = new Set();
   const fontLinks = [];
   let dropped = 0;
+  const truncatedBoards = new Set();
   const started = Date.now();
   try {
     b ??= await launch();
@@ -149,7 +150,7 @@ export async function extractDesign(rawDir, opts = {}) {
         const key = ownKey ?? stableKey([c.html, c.metrics.light]);
         const seen = byKey.get(key);
         if (seen) { seen.occurrences += c.occurrences || 1; continue; }
-        if (candidates.length >= maxCandidates) { dropped++; continue; }
+        if (candidates.length >= maxCandidates) { dropped++; truncatedBoards.add(board.file); continue; }
         const ctx = rest.context ? `${title} · ${rest.context}` : title;
         const out = { ...rest, index: candidates.length, context: cut(ctx, CONTEXT_MAX) };
         byKey.set(key, out);
@@ -157,7 +158,10 @@ export async function extractDesign(rawDir, opts = {}) {
       }
     }
     if (stats.artboards.skipped) note(`${stats.artboards.skipped} planche(s) ignorée(s) : budget de temps dépassé`);
-    if (dropped) note(`${dropped} candidat(s) au-delà du plafond de ${maxCandidates} ignoré(s) (planches de composants prioritaires)`);
+    if (dropped) {
+      stats.artboards.truncated = truncatedBoards.size;
+      note(`${dropped} candidat(s) au-delà du plafond de ${maxCandidates} ignoré(s), venant de ${truncatedBoards.size} planche(s) (planches de composants prioritaires)`);
+    }
     if (!stats.artboards.rendered && !candidates.length) return fail('Aucune planche rendue');
 
     const { css, fontFaceCss } = serializeScoped(rules);
