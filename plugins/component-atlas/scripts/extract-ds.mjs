@@ -3,7 +3,7 @@
 // + ses contrôles internes (measureOnly). CLI : node scripts/extract-ds.mjs <rawDir>
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve, extname, basename } from 'node:path';
+import { join, resolve, extname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './lib/browser.mjs';
 import { tokensToCss } from './lib/tokens.mjs';
@@ -40,26 +40,24 @@ function dsCard(html) {
   return { group: group ? (group[1] ?? group[2] ?? group[3]) : '' };
 }
 
+// Polices : seules les polices fichier (type.fonts) deviennent des @font-face en data URI.
+// type.families (objet rôle → pile CSS, ou tableau) n'est PAS converti en lien Google Fonts :
+// les familles locales (Arial...) casseraient la requête css2. Les polices Google viennent des
+// <link>/@import déjà présents dans tokens.css, bundle.css ou les aperçus (capturés par l'extracteur de page).
 async function fontCss(project, tokens, warnings) {
   let faces = '';
   const links = [];
   const type = tokens?.type ?? {};
-  const fileFamilies = new Set();
-  for (const f of type.fonts ?? []) {
-    if (!f?.file) continue;
-    const file = join(project, f.file);
+  const fonts = Array.isArray(type.fonts) ? type.fonts : Object.values(type.fonts ?? {});
+  for (const f of fonts) {
+    if (!f?.file || typeof f.file !== 'string') continue;
+    const file = resolve(project, f.file);
+    if (!file.startsWith(project + sep)) { warnings.push(`Police hors du projet ignorée : ${f.file}`); continue; }
     if (!existsSync(file)) { warnings.push(`Police introuvable : ${f.file}`); continue; }
     const fam = f.family ?? f.name;
-    if (fam) fileFamilies.add(fam);
     const ext = extname(file).toLowerCase();
     faces += `@font-face{font-family:"${esc(fam ?? basename(file, ext))}";src:url(${await dataUri(file)}) format("${FONT_FORMAT[ext] ?? 'woff2'}");`
       + `${f.weight ? `font-weight:${f.weight};` : ''}${f.style ? `font-style:${f.style};` : ''}font-display:block}`;
-  }
-  const google = (type.families ?? []).map((x) => (typeof x === 'string' ? x : x?.name ?? x?.family))
-    .filter((n) => n && !fileFamilies.has(n) && !/^(system-ui|sans-serif|serif|monospace|ui-\w+)$/i.test(n));
-  if (google.length) {
-    const q = google.map((n) => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`).join('&');
-    links.push(`https://fonts.googleapis.com/css2?${q}&display=swap`);
   }
   return { faces, links };
 }
@@ -104,7 +102,7 @@ async function inlinePreview(project, compDir, html, note) {
     }
     const rel = ref.slice(6).split(/[?#]/)[0];
     const file = resolve(project, rel);
-    if (!file.startsWith(project) || !existsSync(file)) { note(`Ressource introuvable : ${ref}`); continue; }
+    if (!file.startsWith(project + sep) || !existsSync(file)) { note(`Ressource introuvable : ${ref}`); continue; }
     const q = esc(ref).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (skipped.test(rel)) {
       out = out.replace(new RegExp(`<link\\b[^>]*["']${q}["'][^>]*>`, 'gi'), '')

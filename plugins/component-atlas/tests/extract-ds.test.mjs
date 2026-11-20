@@ -69,3 +69,12 @@ test('CLI writes the same files as the page CLI', () => {
     assert.ok(JSON.parse(readFileSync(join(dir, 'candidates.json'), 'utf8')).length >= 3);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('object-shaped type.families does not crash; file font becomes @font-face; no Google link from families', async () => {
+  const r = await run();
+  assert.equal(r.status, 'ok', r.error);
+  assert.match(r.styles.fontFaceCss + (r.styles.css ?? ''), /@font-face/);
+  assert.match(r.styles.fontFaceCss, /font-family:\s*"?Fx Sans/);
+  assert.ok(!r.styles.fontLinks.some((u) => /fonts\.googleapis/.test(u)));
+  assert.ok(r.warnings.some((w) => /hors du projet/.test(w)));
+});
