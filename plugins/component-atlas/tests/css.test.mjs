@@ -74,3 +74,26 @@ test('serializeScoped walks @layer and @container', () => {
   ]);
   assert.equal(out.css, '@layer base{.ca-body{margin:0}}@layer{:host{--a:1}}@container card (min-width: 300px){:host .x{color:red}}');
 });
+test('forceSchemeCondition', async () => {
+  const { forceSchemeCondition: f } = await import('../scripts/lib/css.mjs');
+  assert.equal(f('(prefers-color-scheme: dark)', 'dark'), '');
+  assert.equal(f('(prefers-color-scheme: dark)', 'light'), null);
+  assert.equal(f('(min-width:600px) and (prefers-color-scheme: dark)', 'dark'), '(min-width:600px)');
+  assert.equal(f('screen and (prefers-color-scheme: light)', 'dark'), null);
+  assert.equal(f('(prefers-color-scheme: dark), print', 'light'), 'print');
+  assert.equal(f('(prefers-color-scheme: dark), print', 'dark'), '');
+  assert.equal(f('not all and (prefers-color-scheme: dark)', 'dark'), 'not all and (prefers-color-scheme: dark)');
+  assert.equal(f('(prefers-color-scheme: dark) or (min-width: 1px)', 'light'), '(prefers-color-scheme: dark) or (min-width: 1px)');
+  assert.equal(f('(min-width: 600px)', 'dark'), '(min-width: 600px)');
+});
+test('serializeScoped scheme forcing', () => {
+  const rules = [
+    { type:'style', selector:':root', body:'--bg:#fff' },
+    { type:'media', condition:'(prefers-color-scheme: dark)', children:[{ type:'style', selector:':root', body:'--bg:#000' }] },
+    { type:'media', condition:'(prefers-color-scheme: light) and (min-width: 600px)', children:[{ type:'style', selector:'.x', body:'color:red' }] },
+    { type:'media', condition:'(min-width: 900px)', children:[{ type:'style', selector:'.y', body:'color:blue' }] },
+  ];
+  assert.equal(serializeScoped(rules, { scheme:'dark' }).css, ':host{--bg:#fff}:host{--bg:#000}@media (min-width: 900px){.y{color:blue}}');
+  assert.equal(serializeScoped(rules, { scheme:'light' }).css, ':host{--bg:#fff}@media (min-width: 600px){.x{color:red}}@media (min-width: 900px){.y{color:blue}}');
+  assert.match(serializeScoped(rules).css, /@media \(prefers-color-scheme: dark\)/);
+});

@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>button { background: #2f6bff; color: #fff; }</style></head>
+<body>
+<div id="app"><button>Disparaît en sombre</button></div>
+<script>
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+  if (e.matches) document.getElementById('app').innerHTML = '';
+});
+</script>
+</body>
+</html>

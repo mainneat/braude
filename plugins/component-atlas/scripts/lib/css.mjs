@@ -107,16 +107,53 @@ function scopeLeading(t) {
   return lead + scopeCompound(t.slice(lead.length));
 }
 
+const PCS_TERM = /^\(\s*prefers-color-scheme\s*:\s*(light|dark)\s*\)$/i;
+
+// Force un thème dans une condition @media. Renvoie la condition réécrite,
+// '' (toujours vraie : déballer le bloc) ou null (jamais vraie : supprimer le bloc).
+// Gère les listes à virgules et les conjonctions `and` ; toute autre forme
+// impliquant prefers-color-scheme (not, or, sans valeur) est laissée telle quelle.
+export function forceSchemeCondition(cond, scheme) {
+  if (!/prefers-color-scheme/i.test(cond)) return cond;
+  const parts = splitTop(cond, (c) => c === ',').filter((x) => x !== ',').map((x) => x.trim());
+  if (parts.length > 1) {
+    const out = [];
+    for (const part of parts) {
+      const r = forceSchemeCondition(part, scheme);
+      if (r === '') return '';
+      if (r !== null) out.push(r);
+    }
+    return out.length ? out.join(', ') : null;
+  }
+  const part = parts[0];
+  if (/^\s*not\b/i.test(part)) return part;
+  const terms = part.split(/\s+and\s+(?![^(]*\))/i).map((t) => t.trim());
+  const kept = [];
+  for (const t of terms) {
+    const m = PCS_TERM.exec(t);
+    if (m) { if (m[1].toLowerCase() !== scheme) return null; continue; }
+    if (/prefers-color-scheme/i.test(t)) return part; // forme non gérée : intacte
+    kept.push(t);
+  }
+  return kept.join(' and ');
+}
+
 // RuleNode = {type:'style',selector,body} | {type:'media'|'supports'|'container',condition,children}
 //          | {type:'layer',name,children} | {type:'font-face',cssText} | {type:'keyframes'|'other',cssText}
-export function serializeScoped(rules) {
+// opts.scheme : 'auto' (défaut, media intactes) | 'light' | 'dark' (prefers-color-scheme résolu).
+export function serializeScoped(rules, { scheme = 'auto' } = {}) {
   let css = '';
   let fontFaceCss = '';
   const walk = (list) => {
     let out = '';
     for (const r of list) {
       if (r.type === 'style') out += `${scopeSelector(r.selector)}{${r.body}}`;
-      else if (r.type === 'media' || r.type === 'supports' || r.type === 'container') {
+      else if (r.type === 'media' && scheme !== 'auto') {
+        const cond = forceSchemeCondition(r.condition, scheme);
+        if (cond === null) continue;
+        const inner = walk(r.children);
+        if (inner) out += cond === '' ? inner : `@media ${cond}{${inner}}`;
+      } else if (r.type === 'media' || r.type === 'supports' || r.type === 'container') {
         const inner = walk(r.children);
         if (inner) out += `@${r.type} ${r.condition}{${inner}}`;
       } else if (r.type === 'layer') {

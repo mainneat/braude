@@ -15,7 +15,9 @@ const VIEWPORT = { width: 1280, height: 900 };
 const CONTACT_MAX_HEIGHT = 6000;
 const RAW_LIMIT_MIN = 3000; // éléments détectés avant dédoublonnage (garde-fou mémoire)
 
-const emptyStyles = () => ({ css: '', fontFaceCss: '', fontLinks: [] });
+const emptyStyles = () => ({ css: '', cssLight: '', cssDark: '', fontFaceCss: '', fontLinks: [] });
+const FONT_LINK_HOSTS = new Set(['fonts.googleapis.com']); // seuls liens autorisés par la CSP de la galerie
+const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ''; } };
 const firstLine = (s) => String(s ?? '').split('\n')[0].trim();
 
 function withTimeout(promise, ms, what) {
@@ -34,21 +36,20 @@ export async function extractPage(htmlPath, opts = {}) {
   try {
     html = await readFile(htmlPath, 'utf8');
   } catch (e) {
-    return { status: 'error', error: `Lecture impossible : ${e.message}`, styles: emptyStyles(), candidates: [] };
+    return { status: 'error', error: `Lecture impossible : ${e.message}`, warnings: [], styles: emptyStyles(), candidates: [] };
   }
   return extractFromHtml(html, opts);
 }
 
+// Statut 'error' seulement quand rien ne se rend (fichier absent, chargement en échec sans DOM,
+// navigateur ou détection en échec). Erreurs JS, ressources injoignables, délais avec DOM
+// utilisable → 'ok' + warnings.
 // opts.contactPath (interne au CLI) : capture de la page avec les candidats numérotés.
 export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 20000, browser, contactPath } = {}) {
-  const problems = [];
-  const note = (msg) => { if (!problems.includes(msg)) problems.push(msg); };
-  const result = (styles, candidates) => ({
-    status: problems.length ? 'error' : 'ok',
-    ...(problems.length ? { error: problems.join(' ; ').slice(0, 1000) } : {}),
-    styles,
-    candidates,
-  });
+  const warnings = [];
+  const note = (msg) => { if (!warnings.includes(msg)) warnings.push(msg); };
+  const ok = (styles, candidates) => ({ status: 'ok', warnings, styles, candidates });
+  const fail = (error) => ({ status: 'error', error: error.slice(0, 1000), warnings, styles: emptyStyles(), candidates: [] });
   let b = browser;
   let context;
   try {
@@ -62,12 +63,15 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
         note(`Ressource injoignable : ${req.url()} (${req.failure()?.errorText ?? 'échec'})`);
       }
     });
+    const run = (fn, arg, what) => withTimeout(page.evaluate(fn, arg), timeoutMs, what);
     try {
       await page.setContent(html, { waitUntil: 'networkidle', timeout: timeoutMs });
     } catch (e) {
-      note(`Chargement : ${firstLine(e.message)}`); // on extrait quand même si le DOM existe
+      const msg = `Chargement : ${firstLine(e.message)}`;
+      const rendered = await run(() => (document.body?.childElementCount ?? 0) > 0, undefined, 'DOM').catch(() => false);
+      if (!rendered) return fail(msg);
+      note(msg); // DOM utilisable : on extrait quand même
     }
-    const run = (fn, arg, what) => withTimeout(page.evaluate(fn, arg), timeoutMs, what);
     await run(() => document.fonts?.ready.then(() => true), undefined, 'Polices').catch((e) => note(firstLine(e.message)));
     await run(DETECT_SRC, undefined, 'Injection');
     await run(settle, undefined, 'Stabilisation');
@@ -86,7 +90,7 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
     });
     const kept = [...groups.values()].slice(0, maxCandidates);
 
-    let dark = [];
+    let dark = null;
     try {
       await page.emulateMedia({ colorScheme: 'dark' });
       await run(settle, undefined, 'Stabilisation');
@@ -95,13 +99,17 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
       note(`Thème sombre : ${firstLine(e.message)}`);
     }
 
+    let missing = 0;
     const candidates = kept.map((g, index) => {
-      const d = normMetrics(dark[g.raw]) ?? g.light;
+      let d = dark ? normMetrics(dark[g.raw]) : g.light;
+      if (!d) { missing++; d = g.light; }
       const colors = [...new Set([g.light.bg, g.light.fg, g.light.border, d.bg, d.fg, d.border].filter(Boolean))];
       const { kind, tag, text, context: ctx, html: snippet } = g.c;
       return { index, kind, tag, text, context: ctx, html: snippet, occurrences: g.occurrences,
         metrics: { light: g.light, dark: d }, colors };
     });
+
+    if (missing) note(`Thème sombre : ${missing} élément(s) introuvable(s) après le changement de thème, mesures claires reprises`);
 
     if (contactPath) {
       try {
@@ -117,10 +125,16 @@ export async function extractFromHtml(html, { maxCandidates = 150, timeoutMs = 2
     }
 
     const { css, fontFaceCss } = serializeScoped(raw.rules);
-    return result({ css, fontFaceCss, fontLinks: raw.fontLinks }, candidates);
+    const cssLight = serializeScoped(raw.rules, { scheme: 'light' }).css;
+    const cssDark = serializeScoped(raw.rules, { scheme: 'dark' }).css;
+    const fontLinks = raw.fontLinks.filter((u) => {
+      if (FONT_LINK_HOSTS.has(hostOf(u))) return true;
+      note(`Feuille de style externe ignorée (illisible ou hors Google Fonts) : ${u}`);
+      return false;
+    });
+    return ok({ css, cssLight, cssDark, fontFaceCss, fontLinks }, candidates);
   } catch (e) {
-    note(firstLine(e.message));
-    return result(emptyStyles(), []);
+    return fail(firstLine(e.message));
   } finally {
     if (context) await withTimeout(context.close(), 5000, 'Fermeture').catch(() => {});
     if (b && !browser) await b.close().catch(() => {});
@@ -136,7 +150,7 @@ async function main(argv) {
   const r = await extractPage(join(dir, 'index.html'), { contactPath: join(dir, 'contact.png') });
   await writeFile(join(dir, 'candidates.json'), JSON.stringify(r.candidates, null, 1));
   await writeFile(join(dir, 'styles.json'), JSON.stringify(r.styles));
-  const summary = { status: r.status, ...(r.error ? { error: r.error } : {}), candidates: r.candidates.length };
+  const summary = { status: r.status, ...(r.error ? { error: r.error } : {}), warnings: r.warnings, candidates: r.candidates.length };
   await writeFile(join(dir, 'extract.json'), JSON.stringify(summary, null, 2));
   process.stdout.write(JSON.stringify(summary) + '\n');
 }

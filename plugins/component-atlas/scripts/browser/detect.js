@@ -134,7 +134,13 @@
   function isSegmented(el, visibleSet) {
     if (el.matches('[role=tablist]')) return true;
     if (el.matches(CONTROL)) return false;
-    const kids = [...el.children].filter((k) => visibleSet.has(k));
+    // Frères dans le flux uniquement : un indicateur absolu ou un décor sans texte ne compte pas.
+    const kids = [...el.children].filter((k) => {
+      if (!visibleSet.has(k)) return false;
+      if (k.matches(BUTTONISH)) return true;
+      const pos = getComputedStyle(k).position;
+      return pos !== 'absolute' && pos !== 'fixed' && !!clean(k.textContent, 1);
+    });
     const btns = kids.filter((k) => k.matches(BUTTONISH)).length;
     return btns >= 2 && btns <= SEG_MAX && btns * 2 > kids.length;
   }
@@ -154,7 +160,37 @@
       || el.getAttribute('title') || el.querySelector?.('title')?.textContent || '', TEXT_MAX);
   }
 
+  const LABEL_MAX = 40;
+
+  function labelText(e) {
+    const ids = e.getAttribute('aria-labelledby');
+    if (ids) {
+      const t = ids.split(/\s+/).map((id) => document.getElementById(id)?.textContent || '').join(' ');
+      if (clean(t, 1)) return clean(t, CONTEXT_MAX);
+    }
+    return clean(e.getAttribute('aria-label'), CONTEXT_MAX);
+  }
+
+  // Petite étiquette : le plus proche frère précédent porteur de texte, s'il est une feuille
+  // (aucun enfant élément) de ≤ 40 caractères.
+  function smallLabelOf(el) {
+    for (let s = el.previousElementSibling; s; s = s.previousElementSibling) {
+      if (SKIP.has(s.tagName)) continue;
+      const t = clean(s.textContent, 1000);
+      if (!t) continue;
+      return s.children.length === 0 && t.length <= LABEL_MAX ? t : '';
+    }
+    return '';
+  }
+
   function contextOf(el, headings) {
+    const main = mainContextOf(el, headings);
+    const small = smallLabelOf(el);
+    const parts = [main, small].filter((t, i, a) => t && a.indexOf(t) === i);
+    return parts.join(' · ').slice(0, CONTEXT_MAX);
+  }
+
+  function mainContextOf(el, headings) {
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
     // Dernier titre qui commence avant l'élément (recherche dichotomique, ordre du document).
     let lo = 0, hi = headings.length - 1, idx = -1;
@@ -166,14 +202,13 @@
     while (idx >= 0 && headings[idx].contains(el)) idx--;
     let h = idx >= 0 ? headings[idx] : null;
     while (h && !clean(h.textContent, 1)) { idx--; h = idx >= 0 ? headings[idx] : null; }
-    const labelled = el.parentElement?.closest('[aria-label]');
-    if (labelled && (!h || (h.compareDocumentPosition(labelled) & FOLLOWING))) {
-      return clean(labelled.getAttribute('aria-label'), CONTEXT_MAX);
-    }
+    let labelled = el.parentElement?.closest('[aria-label], [aria-labelledby]');
+    while (labelled && !labelText(labelled)) labelled = labelled.parentElement?.closest('[aria-label], [aria-labelledby]');
+    if (labelled && (!h || (h.compareDocumentPosition(labelled) & FOLLOWING))) return labelText(labelled);
     return h ? clean(h.textContent, CONTEXT_MAX) : '';
   }
 
-  const keepAttr = (n) => n === 'class' || n === 'role' || n === 'style' || n.startsWith('data-') || n.startsWith('aria-');
+  const keepAttr = (n) => n === 'id' || n === 'class' || n === 'role' || n === 'style' || n.startsWith('data-') || n.startsWith('aria-');
   const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
   function shell(el) {

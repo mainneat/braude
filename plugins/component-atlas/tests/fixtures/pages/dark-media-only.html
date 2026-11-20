@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root { --btn: #2f6bff; --btn-fg: #ffffff; }
+@media (prefers-color-scheme: dark) { :root { --btn: #8ab4ff; --btn-fg: #0b1020; } }
+body { margin: 0; padding: 32px; font-family: system-ui, sans-serif; }
+body .panel .primary { background: var(--btn); color: var(--btn-fg); border: 1px solid #000; border-radius: 6px; padding: 8px 14px; }
+@media screen and (prefers-color-scheme: dark) and (min-width: 10px) { body .panel .primary { border-color: #ff0000; } }
+</style>
+</head>
+<body>
+<section class="panel"><button class="primary">Valider</button></section>
+</body>
+</html>
