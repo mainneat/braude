@@ -428,9 +428,9 @@ export function renderColorsView(container, components, ctx) {
 
   const W = chartWidth(container, 560);
   const H = 360;
-  const M = { l: 44, r: 16, t: 14, b: 40 };
+  const M = { l: 44, r: 28, t: 18, b: 40 };
   const band = 56; // colonne des neutres (saturation faible : teinte sans signification)
-  const hx0 = M.l + band + 16;
+  const hx0 = M.l + band + 36;
   const hx1 = W - M.r;
   const yOf = (l) => M.t + (1 - l) * (H - M.t - M.b);
   const xOf = (p) => (p.s < NEUTRAL_S ? M.l + band / 2 : hx0 + (p.h / 360) * (hx1 - hx0));
@@ -445,7 +445,7 @@ export function renderColorsView(container, components, ctx) {
   for (const [deg, name] of HUE_TICKS) {
     const x = hx0 + (deg / 360) * (hx1 - hx0);
     chart.append(svg('line', { class: 'grid-line', x1: x, x2: x, y1: M.t, y2: H - M.b }),
-      svg('text', { class: 'ax-tick', x, y: H - M.b + 16, 'text-anchor': deg === 0 ? 'start' : deg === 360 ? 'end' : 'middle', text: name }));
+      svg('text', { class: 'ax-tick', x, y: H - M.b + 16, 'text-anchor': 'middle', text: name }));
   }
   chart.append(svg('rect', { class: 'sw-band', x: M.l, y: M.t, width: band, height: H - M.t - M.b, rx: 4 }),
     svg('text', { class: 'ax-tick', x: M.l + band / 2, y: H - M.b + 16, 'text-anchor': 'middle', text: 'neutres' }),
@@ -560,9 +560,9 @@ export function renderMetricsView(container, components, ctx) {
   const select = h('select', { id: 'm-type' }, types.map((t) => h('option', { value: t.slug, selected: t.slug === type, text: `${t.label} (${present.get(t.slug)})` })));
   select.addEventListener('change', () => { st.mType = select.value; ctx.rerender(); });
 
-  container.append(vizHead('Mesures',
+  container.append(h('div.viz-block', null, vizHead('Mesures',
     'Chaque point est une valeur distincte, arrondie au pixel ; sa taille suit le nombre de composants qui la partagent.',
-    h('label.field', null, h('span', { text: 'Type mesuré' }), select)));
+    h('label.field', null, h('span', { text: 'Type mesuré' }), select))));
   const group = [];
   for (const [metric, label] of METRICS) {
     container.append(stripPlot(container, ctx, metric, label, metricSeries(components, type, metric), group));
