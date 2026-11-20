@@ -191,6 +191,66 @@ test('filters narrow the tiles', async () => {
   } finally { await close(); }
 });
 
+const KEY_WIDE = data.components.find((c) => c.name === 'Barre supérieure').key.slice(0, 8);
+
+for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
+  test(`a wide component is scaled down to fit its tile, never cropped (${vp.width}px)`, async () => {
+    const { page, errors, close } = await open('/', vp);
+    try {
+      const card = `a.specimen[href="#c-${KEY_WIDE}"]`;
+      await page.waitForSelector(`${card} .scaled:not([hidden])`);
+      const r = await page.$eval(card, (a) => {
+        const frame = a.querySelector('.preview').getBoundingClientRect();
+        const comp = a.querySelector('.tile').shadowRoot.firstElementChild.getBoundingClientRect();
+        return { frame: { l: frame.left, r: frame.right, t: frame.top, b: frame.bottom },
+          comp: { l: comp.left, r: comp.right, t: comp.top, b: comp.bottom },
+          mark: a.querySelector('.scaled').textContent, project: a.querySelector('.specimen-project').textContent };
+      });
+      assert.ok(r.comp.r <= r.frame.r + 1 && r.comp.l >= r.frame.l - 1, JSON.stringify(r));
+      assert.ok(r.comp.b <= r.frame.b + 1, JSON.stringify(r));
+      assert.match(r.mark, /^réduit à \d+ %$/);
+      assert.equal(r.project, 'Orbit');
+      // Un petit composant n'est pas réduit.
+      assert.equal(await page.$eval(`a.specimen[href="#c-${KEY_DARK}"] .scaled`, (el) => el.hidden), true);
+      if (vp.width === 400) {
+        const cols = await page.$eval('.grid', (g) => getComputedStyle(g).gridTemplateColumns.split(' ').length);
+        assert.equal(cols, 1);
+      }
+      assert.deepEqual(errors, []);
+    } finally { await close(); }
+  });
+}
+
+test('the detail stage scrolls horizontally for wide components', async () => {
+  const { page, errors, close } = await open(`/#c-${KEY_WIDE}`);
+  try {
+    await page.waitForSelector('.stage-scroll .tile-large');
+    const r = await page.$eval('.stage-scroll', (el) => {
+      el.scrollLeft = 300;
+      return { left: el.scrollLeft, inert: el.inert, tabindex: el.getAttribute('tabindex'), hostInert: el.querySelector('.tile-large').inert };
+    });
+    assert.ok(r.left > 0, JSON.stringify(r));
+    assert.equal(r.inert, false);
+    assert.equal(r.tabindex, '0');
+    assert.equal(r.hostInert, true);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('gallery tokens are prefixed so they do not leak into components', async () => {
+  const { page, close } = await open('/');
+  try {
+    await page.waitForSelector('.tile');
+    const r = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return { bg: cs.getPropertyValue('--bg'), ink: cs.getPropertyValue('--ink'), caBg: cs.getPropertyValue('--ca-bg') };
+    });
+    assert.equal(r.bg, '');
+    assert.equal(r.ink, '');
+    assert.notEqual(r.caBg.trim(), '');
+  } finally { await close(); }
+});
+
 test('shows an error state when data.json is missing', async () => {
   const { page, close } = await open('/nodata/');
   try {

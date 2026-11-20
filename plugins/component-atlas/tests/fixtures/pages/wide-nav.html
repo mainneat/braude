@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Wide nav</title>
+<style>
+body { margin: 0; font-family: system-ui, sans-serif; background: #fafafa; color: #1b1b1f; }
+.frame { width: 1280px; }
+nav.topbar { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 24px; background: #14213d; color: #fff; }
+nav.topbar .links { display: flex; gap: 28px; white-space: nowrap; }
+nav.topbar a { color: #e5e5e5; text-decoration: none; font-size: 14px; }
+nav.topbar .end { width: 32px; height: 32px; border-radius: 50%; background: #fca311; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <nav class="topbar" aria-label="Principale">
+    <strong>Orbit</strong>
+    <div class="links"><a href="#1">Tableau de bord</a><a href="#2">Projets</a><a href="#3">Équipe</a><a href="#4">Rapports</a><a href="#5">Réglages</a></div>
+    <span class="end"></span>
+  </nav>
+</div>
+</body>
+</html>

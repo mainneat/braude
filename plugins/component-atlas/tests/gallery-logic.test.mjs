@@ -74,7 +74,12 @@ test('summarize counts visible components, analysed artifacts and projects', () 
   const s = summarize(data);
   assert.equal(s.components, data.components.filter((c) => !c.measureOnly).length);
   assert.equal(s.artifacts, data.artifacts.length);
-  assert.equal(s.projects, new Set(data.components.map((c) => c.project)).size);
+  assert.equal(s.projects, new Set(data.components.filter((c) => !c.measureOnly).map((c) => c.project)).size);
+});
+
+test('summarize ignores projects that only have measure-only components', () => {
+  const s = summarize({ artifacts: [], components: [C('a', 'button', 'x', 'P'), C('b', 'other', 'y', 'Q', { measureOnly: true })] });
+  assert.deepEqual(s, { components: 1, artifacts: 0, projects: 1 });
 });
 
 test('sinceFromPeriod', () => {

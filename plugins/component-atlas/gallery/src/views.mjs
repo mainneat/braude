@@ -29,18 +29,70 @@ function mountTile(host, comp, ctx, theme) {
   mountSnippet(host, { html: comp.html, styles: ctx.data.styles[comp.artifactId], fonts: ctx.data.fonts, theme });
 }
 
+// Aperçu des tuiles : le composant est mis en page à sa largeur naturelle puis réduit
+// (jamais agrandi) pour tenir dans la zone d'aperçu, sans rognage sauf sous l'échelle minimale.
+const PREVIEW_MAX_H = 240;
+const MIN_SCALE = 0.2;
+const FIT = typeof ResizeObserver === 'function'
+  ? new ResizeObserver((entries) => { for (const e of entries) e.target.__caFit?.(false); })
+  : null;
+
+/** Largeur et hauteur naturelles du rendu : la coquille .ca-body et tout ce qui en déborde. */
+function naturalSize(host, avail) {
+  const root = host.shadowRoot && host.shadowRoot.firstElementChild;
+  host.style.width = '';
+  if (!root) return null;
+  const w = Math.max(avail, Math.ceil(root.scrollWidth));
+  host.style.width = w > avail ? `${w}px` : '';
+  return { w, h: Math.max(1, Math.ceil(root.scrollHeight), Math.ceil(root.getBoundingClientRect().height)) };
+}
+
+function fitPreview(frame, host, mark) {
+  let lastAvail = -1;
+  const fit = (force = true) => {
+    const avail = frame.clientWidth;
+    if (!avail || (!force && avail === lastAvail)) return;
+    lastAvail = avail;
+    host.style.transform = '';
+    const size = naturalSize(host, avail);
+    if (!size) return;
+    const scale = Math.max(MIN_SCALE, Math.min(1, avail / size.w, PREVIEW_MAX_H / size.h));
+    if (scale < 1) {
+      host.style.transform = `scale(${scale})`;
+      mark.textContent = `réduit à ${Math.round(scale * 100)} %`;
+      mark.hidden = false;
+    } else {
+      mark.hidden = true;
+    }
+    frame.style.height = `${Math.min(PREVIEW_MAX_H, Math.ceil(size.h * scale))}px`;
+  };
+  frame.__caFit = fit;
+  if (FIT) FIT.observe(frame);
+  fit();
+}
+
+/** Recalcule les aperçus (après un changement de thème ou le chargement des polices). */
+export function refitPreviews(container) {
+  for (const frame of container.querySelectorAll('.preview')) frame.__caFit?.(true);
+}
+
 function specimen(comp, ctx) {
   const stage = h('div.tile', { 'data-key': comp.key8, inert: true, 'aria-hidden': 'true' });
+  const frame = h('div.preview', null, stage);
+  const mark = h('span.scaled', { hidden: true });
   const m = comp.metrics && comp.metrics.light;
   const card = h('a.specimen', { href: `#c-${comp.key8}`, 'aria-label': `${comp.name}, ${comp.project}` },
-    stage,
+    frame,
     h('div.specimen-cap', null,
       h('span.specimen-name', { text: comp.name }),
       h('span.specimen-meta', null,
+        h('span.specimen-project', { text: comp.project }),
         comp.isDS ? h('span.badge', { text: 'DS', title: 'Issu du design system' }) : null,
         comp.occurrences > 1 ? h('span.occ', { text: `×${comp.occurrences}`, title: plural(comp.occurrences, 'occurrence', 'occurrences') }) : null,
-        m ? h('span.dim', { text: `${px(m.width)}×${px(m.height)}` }) : null)));
+        m ? h('span.dim', { text: `${px(m.width)}×${px(m.height)}` }) : null,
+        mark)));
   mountTile(stage, comp, ctx, ctx.renderTheme);
+  queueMicrotask(() => fitPreview(frame, stage, mark));
   return card;
 }
 
@@ -145,6 +197,9 @@ export function renderDetail(container, comp, ctx) {
   const cssLabel = () => (scheme() === 'dark' ? 'sombre' : 'clair');
 
   const stage = h('div.tile.tile-large', { 'data-key': comp.key8, inert: true, 'aria-hidden': 'true' });
+  // Conteneur de défilement non inerte : l'hôte inerte ne peut pas défiler lui-même.
+  const scroller = h('div.stage-scroll', { tabindex: '0', role: 'region', 'aria-label': `Rendu de ${comp.name}` }, stage);
+  const sizeStage = () => naturalSize(stage, scroller.clientWidth);
   const cssPre = h('pre.code', { tabindex: '0' }, h('code', { text: cssFor() }));
   const htmlPre = h('pre.code', { tabindex: '0' }, h('code', { text: comp.html }));
   const cssTitle = h('h2', { text: `CSS scopé (${cssLabel()})` });
@@ -168,8 +223,8 @@ export function renderDetail(container, comp, ctx) {
     h('div.detail-stage', null,
       h('div.stage-bar', null,
         h('span.muted', { text: comp.occurrences > 1 ? `${comp.occurrences} occurrences` : '1 occurrence' }),
-        themeSwitch('detail-theme', theme, (v) => { theme = v; setSnippetTheme(stage, v); refreshCss(); })),
-      stage),
+        themeSwitch('detail-theme', theme, (v) => { theme = v; setSnippetTheme(stage, v); refreshCss(); sizeStage(); })),
+      scroller),
     h('div.detail-cols', null,
       h('section.panel', null, h('h2', { text: 'Mesures' }), metricsTable(comp.metrics || {})),
       h('section.panel', null,
@@ -183,6 +238,8 @@ export function renderDetail(container, comp, ctx) {
       h('div.panel-head', null, cssTitle, copyButton('Copier le CSS', cssFor, cssPre)),
       cssPre)));
   mountTile(stage, comp, ctx, theme);
+  sizeStage();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (stage.isConnected) sizeStage(); });
 }
 
 export function renderUnanalysed(container, artifacts, notes) {

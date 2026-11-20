@@ -73,7 +73,7 @@ export function summarize(data) {
   return {
     components: visible.length,
     artifacts: data.artifacts.length,
-    projects: new Set(data.components.map((c) => c.project)).size,
+    projects: new Set(visible.map((c) => c.project)).size,
   };
 }
 

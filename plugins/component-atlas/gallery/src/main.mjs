@@ -4,7 +4,7 @@ import { setSnippetTheme } from './tile.mjs';
 import {
   filterComponents, parseRoute, enrichComponents, summarize, sinceFromPeriod, facetOptions, unanalysed, formatDate,
 } from './logic.mjs';
-import { h, plural, renderTypesView, renderDetail, renderUnanalysed, themeSwitch } from './views.mjs';
+import { h, plural, renderTypesView, renderDetail, renderUnanalysed, themeSwitch, refitPreviews } from './views.mjs';
 
 // Vues à onglet. Les vues Matrice, Couleurs et Mesures s'ajoutent ici (Task 8).
 const VIEWS = [
@@ -74,6 +74,7 @@ function setupChrome() {
   $('render-theme').replaceChildren(themeSwitch('f-theme', app.renderTheme, (v) => {
     app.renderTheme = v;
     for (const tile of $('view').querySelectorAll('.tile')) setSnippetTheme(tile, v);
+    refitPreviews($('view'));
   }));
 
   $('tabs').replaceChildren(...VIEWS.map((v) => h('a.tab', { href: `#${v.id}`, 'data-view': v.id, text: v.label })));
@@ -112,6 +113,7 @@ function render() {
   $('result-count').textContent = comps.length === total ? plural(total, 'composant', 'composants')
     : `${comps.length} sur ${total} composants`;
   def.render(view, comps, ctx());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => refitPreviews(view));
   if (prev === 'detail') scrollTo(0, app.scroll[def.id] || 0);
   app.lastView = def.id;
 }
