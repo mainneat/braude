@@ -14,10 +14,9 @@ Tu produis une galerie privée (un artifact) qui recense les composants de tous 
 
 ## 1. Prérequis
 ```
-node --version
-node -e "require('playwright')"   # à lancer aussi depuis <base>/../.. ; ou global
+node "<base>/../../scripts/check.mjs"
 ```
-Si Node < 18 ou si Playwright ne se charge pas : explique à l'utilisateur d'exécuter `npm i -D playwright && npx playwright install chromium`, puis **arrête-toi**.
+Affiche `ok` si Node >= 18 et si Playwright + Chromium se lancent (résolution : plugin, répertoire courant, global). Sinon le script affiche l'erreur et la correction (`npm i -g playwright && npx playwright install chromium`) : relaie-la à l'utilisateur, puis **arrête-toi**.
 
 ## 2. Inventaire et plan
 1. `Artifact list` avec `scope:"mine"`, `limit:200`. Tant que la réponse donne un `next_page_token`, rappelle avec `page_token`. Ne lis rien d'autre.
@@ -37,7 +36,7 @@ Découpe `toProcess` en lots de 8 et lance un sous-agent par lot, **en parallèl
 Les scripts écrivent `candidates.json`, `styles.json`, `contact.png` et `extract.json` dans `raw/<id>/`. Les artifacts `other-type` ou en erreur n'ont pas de classification.
 
 ## 4. Classification (sous-agents)
-Seuls les artifacts `ok` qui ont un `candidates.json` non vide. Lots de 8, un sous-agent par lot, en parallèle. Prompt type :
+Seuls les artifacts `ok` qui ont un `candidates.json` non vide (sans candidat, ne classe rien : le build les accepte vides). Lots de 8, un sous-agent par lot, en parallèle. Prompt type :
 
 > Pour chaque artifact `<id>` du lot :
 > 1. Lis `D/raw/<id>/contact.png` avec l'outil Read (capture de la page).
@@ -52,7 +51,7 @@ Seuls les artifacts `ok` qui ont un `candidates.json` non vide. Lots de 8, un so
 >   `button` (Button), `icon-button` (Icon button), `toggle` (Toggle / switch), `segmented` (Segmented control / tabs), `checkbox-radio` (Checkbox / radio), `input` (Input / search), `select` (Select / dropdown), `slider` (Slider), `card` (Card), `chip` (Chip / tag / badge), `avatar` (Avatar), `icon` (Icon), `navigation` (Navigation), `list-item` (List item / row), `overlay` (Modal / sheet / popover), `toast` (Toast / banner), `chart` (Chart / data viz), `other` (Autre).
 > - `keep:false` pour : wrappers de mise en page, chrome de page (en-têtes, pieds, titres), contrôles de démo de la page elle-même (sélecteur de thème du showcase, etc.), doublons visuels (garde le plus représentatif). Mets quand même un `type` valide (`other`).
 > - `name` : court (2-4 mots), tiré du contexte, dans la langue de l'artifact. Pour un composant de Design System, garde `presetName` tel quel.
-> - Valide : `node --input-type=module -e "import {validateClassified} from '<base>/../../scripts/lib/schema.mjs';import fs from 'node:fs';const c=JSON.parse(fs.readFileSync('D/raw/<id>/classified.json'));const n=JSON.parse(fs.readFileSync('D/raw/<id>/candidates.json')).length;console.log(validateClassified(c,n))"`. Si la liste d'erreurs n'est pas vide, corrige et revalide **une seule fois**.
+> - Valide : `node "<base>/../../scripts/validate-classified.mjs" D/raw/<id>`. S'il affiche des erreurs (exit 1), corrige et revalide **une seule fois**.
 > Renvoie une ligne par artifact : `id | projet | N gardés / M | ok ou erreur`.
 
 ## 5. Build

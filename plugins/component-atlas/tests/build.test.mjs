@@ -178,3 +178,10 @@ test('assertSize refuses data.json over 15 MB and lists biggest artifacts', () =
   data.styles.a = { fontIds: ['f'] };
   assert.throws(() => assertSize(data, JSON.stringify(data)), /15 Mo[\s\S]*Big/);
 });
+
+test('0 candidates without classified.json is ok and empty', async () => {
+  const dir = await setup(async (d) => [await art(d, 'empty', { cands: [] })]);
+  const data = await buildData({ dir, now: 'N' });
+  assert.equal(data.artifacts[0].status, 'ok');
+  assert.equal(data.components.length, 0);
+});

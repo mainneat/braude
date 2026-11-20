@@ -14,11 +14,13 @@ Les composants issus d'un artifact de type Design System portent un badge DS. Le
 ## Prérequis
 
 - Node.js 18 ou plus récent
-- Playwright et Chromium :
+- Playwright et Chromium, trouvés dans le plugin, le répertoire courant ou en global :
 
 ```
-npm i -D playwright && npx playwright install chromium
+npm i -g playwright && npx playwright install chromium
 ```
+
+(`npm i -D playwright` dans votre répertoire de travail fonctionne aussi.)
 
 ## Utilisation
 
@@ -26,7 +28,7 @@ Dans Claude Code, lancez `/component-atlas`, ou demandez par exemple « fais la 
 
 ## Confidentialité
 
-La galerie est publiée en **privé** : vous seul la voyez. Pour la partager, utilisez le menu Share de l'artifact. Le contenu de vos artifacts est lu par des sous-agents et traité localement ; seuls des résumés transitent dans la conversation principale.
+La galerie est publiée en **privé** : vous seul la voyez. Pour la partager, utilisez le menu Share de l'artifact. Le contenu de vos artifacts est lu par des sous-agents Claude dans votre session, puis traité localement ; seuls des résumés transitent dans la conversation principale. Rien n'est publié, hormis la galerie privée.
 
 ## Où vivent les données
 
@@ -47,7 +49,7 @@ Supprimer `cache.json` force un retraitement complet.
 { "2nphJ7McYhgAN8n8UH8nuK": "Nimb" }
 ```
 
-Éditez-le à la main : vos modifications sont conservées aux runs suivants. Relancez ensuite le skill (ou `node scripts/build.mjs --dir .component-atlas`) pour reconstruire et republier.
+Éditez-le à la main : vos modifications sont conservées aux runs suivants. Relancez ensuite `/component-atlas` pour reconstruire et republier.
 
 ## Développement
 

@@ -24,3 +24,10 @@ test('every referenced script exists', () => {
 test('every taxonomy slug appears', () => {
   for (const { slug } of TAXONOMY) assert.ok(md.includes('`' + slug + '`'), `slug ${slug} missing`);
 });
+
+test('check.mjs exits 0 when the browser is available', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync('node', [fileURLToPath(new URL('../scripts/check.mjs', import.meta.url))], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /ok/);
+});

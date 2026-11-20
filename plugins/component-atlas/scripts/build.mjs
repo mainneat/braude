@@ -90,6 +90,7 @@ export async function buildData({ dir, now }) {
     if (extract.status === 'error') { fail(extract.error || 'Extraction en erreur'); continue; }
     const cands = await loadJson(path.join(raw, 'candidates.json'), []);
     const classified = await loadJson(path.join(raw, 'classified.json'), null).catch(() => undefined);
+    if ((classified === null || classified === undefined) && cands.length === 0) continue; // page sans composant : ok, vide
     if (classified === null || classified === undefined) { fail('Classification manquante'); continue; }
     const errs = validateClassified(classified, cands.length);
     if (errs.length) { fail(errs.join(' ; ')); continue; }
