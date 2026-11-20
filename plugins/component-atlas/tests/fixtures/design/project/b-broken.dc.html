@@ -1,0 +1,10 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Broken</title><script src="./support.js"></script><link rel="stylesheet" href="app.css"></head><body>
+<x-dc>
+<div class="cmp"><button class="pill">{{label}}</button></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { throw new Error('planche cassée volontairement'); }
+}
+</script>
+</body></html>

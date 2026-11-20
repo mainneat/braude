@@ -1,0 +1,17 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Pill</title><script src="./support.js"></script><link rel="stylesheet" href="ds/kit/tokens.css"><link rel="stylesheet" href="ds/kit/components/bundle.css"><link rel="stylesheet" href="app.css"></head><body>
+<x-dc>
+<helmet><style>.pill-wrap { padding: 24px; }</style></helmet>
+<!-- c-pill · bouton principal -->
+<div class="cmp pill-wrap" data-theme="{{themeAttr}}">
+<button class="pill" type="button" onClick="{{go}}">{{label}}</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"label":{"editor":"text","default":"Continuer"},"theme":{"editor":"enum","options":["","light","dark"],"default":""}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var p = this.props;
+    return { label: p.label ?? 'Continuer', themeAttr: p.theme || '', go: function () {} };
+  }
+}
+</script>
+</body></html>

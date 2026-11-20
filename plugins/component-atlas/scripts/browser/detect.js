@@ -380,6 +380,7 @@
         text: textOf(e),
         context: contextOf(e, headings),
         html: open + snapshot(e) + close,
+        shellLen: [open.length, close.length],
         metrics: measure(e),
         ...(e.getAttribute('role') ? { role: e.getAttribute('role') } : {}),
         ...(e.localName === 'input' ? { inputType: e.type } : {}),

@@ -1,0 +1,5 @@
+/* Kit — generated from tokens.json */
+:root, [data-theme="light"] { --accent: #2f6bff; --surface: #ffffff; --ink: #111111; --line: #d2d2ce; --ground: #f3f3f1; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --surface: #1c1c1e; --ink: #f3f3f1; --line: #3a3a3c; --ground: #0b0b0b; }
+}

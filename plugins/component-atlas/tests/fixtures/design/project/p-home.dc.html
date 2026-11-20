@@ -1,0 +1,26 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Accueil</title><script src="./support.js"></script><link rel="stylesheet" href="ds/kit/tokens.css"><link rel="stylesheet" href="ds/kit/components/bundle.css"><link rel="stylesheet" href="app.css"></head><body>
+<x-dc>
+<helmet><style>.home { padding: 32px; display: flex; flex-direction: column; gap: 16px; }</style></helmet>
+<div class="cmp home" data-theme="">
+<h1>{{title}}</h1>
+<section class="card" aria-label="Réglages">
+<h2>Réglages</h2>
+<sc-for list="{{settings}}" as="it" hint-placeholder-count="3">
+<div class="row"><span>{{it.label}}</span><button class="switch" type="button" role="switch" aria-checked="{{it.on}}"><i></i></button></div>
+</sc-for>
+<dc-import name="c-pill" label="Continuer" hint-size="140px,40px"></dc-import>
+</section>
+<div class="row"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle></svg><span>Aide</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"title":{"editor":"text","default":"Bonjour"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      title: this.props.title ?? 'Bonjour',
+      settings: [{ label: 'Notifications', on: 'true' }, { label: 'Sons', on: 'true' }, { label: 'Vibreur', on: 'true' }]
+    };
+  }
+}
+</script>
+</body></html>

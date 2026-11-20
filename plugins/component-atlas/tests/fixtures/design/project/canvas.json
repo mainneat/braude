@@ -1,0 +1,13 @@
+{
+ "v": 3,
+ "title": "Fixture Design",
+ "pages": [{ "id": "pages", "name": "Pages" }, { "id": "components", "name": "Components" }],
+ "boards": {
+  "p-home.dc.html": { "x": 0, "y": 0, "w": 900, "h": 700, "title": "Accueil", "page": "pages" },
+  "b-broken.dc.html": { "x": 1000, "y": 0, "w": 400, "h": 300, "title": "Broken board", "page": "pages" },
+  "c-ghost.dc.html": { "x": 0, "y": 900, "w": 300, "h": 200, "title": "Ghost", "page": "components" },
+  "c-pill.dc.html": { "x": 400, "y": 900, "w": 360, "h": 200, "title": "Pill button", "is_interactive": true, "page": "components" }
+ },
+ "order": ["p-home.dc.html", "b-broken.dc.html", "c-ghost.dc.html", "c-pill.dc.html"],
+ "designSystems": [{ "title": "Kit", "namespace": "kit" }]
+}
