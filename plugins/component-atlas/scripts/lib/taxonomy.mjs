@@ -1,0 +1,21 @@
+export const TAXONOMY = [
+  { slug: 'button', label: 'Button' },
+  { slug: 'icon-button', label: 'Icon button' },
+  { slug: 'toggle', label: 'Toggle / switch' },
+  { slug: 'segmented', label: 'Segmented control / tabs' },
+  { slug: 'checkbox-radio', label: 'Checkbox / radio' },
+  { slug: 'input', label: 'Input / search' },
+  { slug: 'select', label: 'Select / dropdown' },
+  { slug: 'slider', label: 'Slider' },
+  { slug: 'card', label: 'Card' },
+  { slug: 'chip', label: 'Chip / tag / badge' },
+  { slug: 'avatar', label: 'Avatar' },
+  { slug: 'icon', label: 'Icon' },
+  { slug: 'navigation', label: 'Navigation' },
+  { slug: 'list-item', label: 'List item / row' },
+  { slug: 'overlay', label: 'Modal / sheet / popover' },
+  { slug: 'toast', label: 'Toast / banner' },
+  { slug: 'chart', label: 'Chart / data viz' },
+  { slug: 'other', label: 'Autre' },
+];
+export const TYPE_SLUGS = new Set(TAXONOMY.map((t) => t.slug));

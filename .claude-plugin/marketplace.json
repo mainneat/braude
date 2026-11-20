@@ -1,0 +1,11 @@
+{
+  "name": "component-atlas-marketplace",
+  "owner": { "name": "Component Atlas" },
+  "plugins": [
+    {
+      "name": "component-atlas",
+      "source": "./plugins/component-atlas",
+      "description": "Cartographie visuelle des composants dessinés dans vos artifacts claude.ai"
+    }
+  ]
+}
