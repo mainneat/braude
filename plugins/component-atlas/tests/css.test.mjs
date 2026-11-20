@@ -66,3 +66,11 @@ test('scopeSelector functional pseudo-classes', () => {
   assert.equal(scopeSelector(':root:not([data-theme="light"])'), ':host(:not([data-theme="light"]))');
   assert.equal(scopeSelector('body\\:x'), 'body\\:x');
 });
+test('serializeScoped walks @layer and @container', () => {
+  const out = serializeScoped([
+    { type:'layer', name:'base', children:[{ type:'style', selector:'body', body:'margin:0' }] },
+    { type:'layer', name:'', children:[{ type:'style', selector:':root', body:'--a:1' }] },
+    { type:'container', condition:'card (min-width: 300px)', children:[{ type:'style', selector:'html .x', body:'color:red' }] },
+  ]);
+  assert.equal(out.css, '@layer base{.ca-body{margin:0}}@layer{:host{--a:1}}@container card (min-width: 300px){:host .x{color:red}}');
+});

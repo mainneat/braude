@@ -107,6 +107,8 @@ function scopeLeading(t) {
   return lead + scopeCompound(t.slice(lead.length));
 }
 
+// RuleNode = {type:'style',selector,body} | {type:'media'|'supports'|'container',condition,children}
+//          | {type:'layer',name,children} | {type:'font-face',cssText} | {type:'keyframes'|'other',cssText}
 export function serializeScoped(rules) {
   let css = '';
   let fontFaceCss = '';
@@ -114,9 +116,13 @@ export function serializeScoped(rules) {
     let out = '';
     for (const r of list) {
       if (r.type === 'style') out += `${scopeSelector(r.selector)}{${r.body}}`;
-      else if (r.type === 'media' || r.type === 'supports') {
+      else if (r.type === 'media' || r.type === 'supports' || r.type === 'container') {
         const inner = walk(r.children);
         if (inner) out += `@${r.type} ${r.condition}{${inner}}`;
+      } else if (r.type === 'layer') {
+        // Même vide, un bloc @layer nommé fixe l'ordre des couches : on le garde.
+        const inner = walk(r.children);
+        if (inner || r.name) out += `@layer${r.name ? ' ' + r.name : ''}{${inner}}`;
       } else if (r.type === 'font-face') fontFaceCss += r.cssText;
       else out += r.cssText;
     }

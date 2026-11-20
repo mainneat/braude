@@ -1,0 +1,143 @@
+import test, { before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { mkdtempSync, copyFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { launch } from '../scripts/lib/browser.mjs';
+import { extractPage } from '../scripts/extract-page.mjs';
+import { toHex } from '../scripts/lib/color.mjs';
+
+const fx = (name) => fileURLToPath(new URL(`./fixtures/pages/${name}`, import.meta.url));
+let browser;
+before(async () => { browser = await launch(); });
+after(async () => { await browser?.close(); });
+const run = (name, opts = {}) => extractPage(fx(name), { browser, ...opts });
+
+// Rend le html d'un candidat dans un shadow root (CSS scopé adopté) sur une page vierge,
+// thème forcé, et renvoie la couleur de fond calculée du premier élément `sel`.
+async function renderedBg(styles, html, theme, sel) {
+  const page = await browser.newPage();
+  try {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setContent('<!doctype html><html><head></head><body><div id="host"></div></body></html>');
+    return await page.evaluate(({ css, fontFaceCss, html, theme, sel }) => {
+      const st = document.createElement('style');
+      st.textContent = fontFaceCss;
+      document.head.appendChild(st);
+      const host = document.getElementById('host');
+      host.setAttribute('data-theme', theme);
+      const root = host.attachShadow({ mode: 'open' });
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+      root.adoptedStyleSheets = [sheet];
+      root.innerHTML = html;
+      return getComputedStyle(root.querySelector(sel)).backgroundColor;
+    }, { ...styles, html, theme, sel });
+  } finally { await page.close(); }
+}
+
+test('basic page yields typed candidates', async () => {
+  const r = await run('basic.html');
+  assert.equal(r.status, 'ok', r.error);
+  const kinds = r.candidates.map((c) => c.kind);
+  for (const k of ['control', 'card', 'icon', 'nav']) assert.ok(kinds.includes(k), k);
+  assert.equal(r.candidates.filter((c) => c.kind === 'icon').length, 3);
+  assert.ok(r.candidates.some((c) => c.kind === 'control' && c.html.includes('role="switch"')));
+  assert.equal(r.candidates.filter((c) => c.tag === 'button').length, 2, 'hidden button ignored');
+  r.candidates.forEach((c, i) => assert.equal(c.index, i));
+  for (const c of r.candidates) assert.doesNotMatch(c.html, /data-ca-/);
+  const save = r.candidates.find((c) => c.text === 'Enregistrer');
+  assert.equal(save.context, 'Actions');
+  assert.equal(save.occurrences, 1);
+  assert.equal(save.metrics.light.bg, '#2f6bff');
+  assert.equal(save.metrics.light.radius, 8);
+  assert.ok(save.colors.includes('#2f6bff'));
+  assert.match(save.html, /^<div class="ca-body page"><main><div class="actions"><button class="btn">Enregistrer<\/button><\/div><\/main><\/div>$/);
+  const card = r.candidates.find((c) => c.kind === 'card');
+  assert.match(card.html, /Titre de carte/);
+});
+
+test('font-face rules go to fontFaceCss', async () => {
+  const r = await run('basic.html');
+  assert.match(r.styles.fontFaceCss, /AtlasTest/);
+  assert.doesNotMatch(r.styles.css, /@font-face/);
+  assert.match(r.styles.css, /:host\{[^}]*--accent/);
+  assert.match(r.styles.css, /\.ca-body\{/);
+  assert.ok(Array.isArray(r.styles.fontLinks));
+});
+
+test('JS-generated segmented control is captured with ancestor shell', async () => {
+  const r = await run('js-generated.html');
+  const seg = r.candidates.find((c) => c.kind === 'segmented');
+  assert.ok(seg);
+  assert.match(seg.html, /class="ca-body/);
+  assert.match(seg.html, /<div class="demo"><div class="seg">/);
+  assert.doesNotMatch(seg.html, /id="root"/);
+  assert.equal(seg.context, 'Nimb switches');
+  assert.equal(r.candidates.filter((c) => c.kind === 'control').length, 0);
+  // l'indicateur dépend de l'ancêtre .demo : il doit garder son fond blanc une fois scopé
+  assert.equal(toHex(await renderedBg(r.styles, seg.html, 'light', '.ind')), '#ffffff');
+});
+
+test('dark metrics differ and scoped CSS reproduces original colors', async () => {
+  const r = await run('dark-tokens.html');
+  const b = r.candidates.find((c) => c.tag === 'button');
+  assert.equal(b.metrics.light.bg, '#2f6bff');
+  assert.equal(b.metrics.dark.bg, '#8ab4ff');
+  assert.notEqual(b.metrics.light.fg, b.metrics.dark.fg);
+  for (const theme of ['light', 'dark']) {
+    const bg = await renderedBg(r.styles, b.html, theme, 'button');
+    assert.equal(toHex(bg), b.metrics[theme].bg, theme);
+  }
+  assert.ok(b.colors.includes('#2f6bff') && b.colors.includes('#8ab4ff'));
+});
+
+test('broken page does not throw', async () => {
+  const t0 = Date.now();
+  const r = await run('broken.html', { timeoutMs: 5000 });
+  assert.ok(['ok', 'error'].includes(r.status));
+  assert.equal(r.status, 'error');
+  assert.match(r.error, /thisDoesNotExist|cdn\.invalid/);
+  assert.ok(r.candidates.some((c) => c.text === 'Toujours là'), 'DOM still extracted');
+  assert.ok(Date.now() - t0 < 10000);
+});
+
+test('missing file yields error status', async () => {
+  const r = await run('nope.html');
+  assert.equal(r.status, 'error');
+  assert.deepEqual(r.candidates, []);
+});
+
+test('repeated elements are deduped before the cap', async () => {
+  const r = await run('repeated.html', { maxCandidates: 5 });
+  const buttons = r.candidates.filter((c) => c.tag === 'button');
+  assert.equal(buttons.length, 2);
+  assert.equal(Math.max(...buttons.map((b) => b.occurrences)), 300);
+  assert.ok(r.candidates.length <= 5);
+});
+
+test('cap applies after dedup', async () => {
+  const r = await run('basic.html', { maxCandidates: 2 });
+  assert.equal(r.candidates.length, 2);
+  r.candidates.forEach((c, i) => assert.equal(c.index, i));
+});
+
+test('CLI writes candidates, styles, status and contact sheet', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ca-raw-'));
+  try {
+    copyFileSync(fx('basic.html'), join(dir, 'index.html'));
+    const cli = fileURLToPath(new URL('../scripts/extract-page.mjs', import.meta.url));
+    const out = JSON.parse(execFileSync(process.execPath, [cli, dir], { encoding: 'utf8' }));
+    assert.equal(out.status, 'ok');
+    const cands = JSON.parse(readFileSync(join(dir, 'candidates.json'), 'utf8'));
+    assert.equal(out.candidates, cands.length);
+    assert.ok(cands.length > 0);
+    const styles = JSON.parse(readFileSync(join(dir, 'styles.json'), 'utf8'));
+    assert.equal(typeof styles.css, 'string');
+    assert.equal(JSON.parse(readFileSync(join(dir, 'extract.json'), 'utf8')).status, 'ok');
+    const png = readFileSync(join(dir, 'contact.png'));
+    assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

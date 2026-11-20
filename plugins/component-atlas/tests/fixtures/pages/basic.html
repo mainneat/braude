@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Basic</title>
+<style>
+@font-face { font-family: "AtlasTest"; src: url(data:font/woff2;base64,d09GMgABAAAAAAAA) format("woff2"); }
+:root { --ink: #1d1d1f; --accent: #2f6bff; --surface: #f4f4f6; }
+body { margin: 0; font-family: "AtlasTest", system-ui, sans-serif; color: var(--ink); background: #ffffff; }
+nav.top { display: flex; gap: 12px; padding: 12px 24px; border-bottom: 1px solid #ddd; }
+nav.top a { color: var(--ink); text-decoration: none; }
+main { padding: 24px; }
+.btn { padding: 8px 16px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font-size: 14px; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.card { width: 320px; padding: 16px; margin: 24px 0; border-radius: 12px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.card h3 { margin: 0 0 8px; }
+.switch { display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: #ccc; }
+.icons svg { width: 20px; height: 20px; margin-right: 8px; }
+</style>
+</head>
+<body class="page">
+<nav class="top"><a href="#a">Accueil</a><a href="#b">Projets</a><a href="#c">Contact</a></nav>
+<main>
+  <h2>Actions</h2>
+  <div class="actions">
+    <button class="btn">Enregistrer</button>
+    <span>ou</span>
+    <span>bien</span>
+    <button class="btn ghost">Annuler</button>
+  </div>
+  <h2>Carte</h2>
+  <div class="card"><h3>Titre de carte</h3><p>Un texte de description assez long.</p></div>
+  <h2>Réglages</h2>
+  <div role="switch" aria-checked="true" class="switch" tabindex="0"></div>
+  <h2>Icônes</h2>
+  <div class="icons">
+    <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="currentColor"/></svg>
+    <svg viewBox="0 0 20 20"><rect x="2" y="2" width="16" height="16" fill="currentColor"/></svg>
+    <svg viewBox="0 0 20 20"><path d="M2 18 L10 2 L18 18 Z" fill="currentColor"/></svg>
+  </div>
+  <div style="display:none"><button class="btn">Caché</button></div>
+</main>
+</body>
+</html>

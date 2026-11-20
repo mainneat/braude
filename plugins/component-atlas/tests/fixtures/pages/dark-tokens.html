@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root { --bg: #ffffff; --fg: #111111; --btn: #2f6bff; --btn-fg: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #121212; --fg: #eeeeee; --btn: #8ab4ff; --btn-fg: #0b1020; }
+}
+:root[data-theme="dark"] { --bg: #121212; --fg: #eeeeee; --btn: #8ab4ff; --btn-fg: #0b1020; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; padding: 32px; }
+body .panel .primary { background: var(--btn); color: var(--btn-fg); border: 0; border-radius: 6px; padding: 8px 14px; }
+</style>
+</head>
+<body>
+<h2>Jetons</h2>
+<section class="panel"><button class="primary">Valider</button></section>
+</body>
+</html>

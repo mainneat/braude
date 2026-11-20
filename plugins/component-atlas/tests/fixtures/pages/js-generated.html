@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { margin: 0; padding: 40px; font-family: system-ui, sans-serif; background: #f0f0f3; }
+.demo .seg { position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: #e2e2e8; }
+.demo .seg button { position: relative; z-index: 1; border: 0; background: transparent; padding: 6px 14px; font: inherit; color: #333; }
+.demo .seg .ind { position: absolute; top: 3px; bottom: 3px; left: 3px; width: 33%; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+<h1>Nimb switches</h1>
+<div class="demo" id="root"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('root').innerHTML =
+    '<div class="seg"><span class="ind"></span><button>Jour</button><button>Semaine</button><button>Mois</button></div>';
+});
+</script>
+</body>
+</html>
