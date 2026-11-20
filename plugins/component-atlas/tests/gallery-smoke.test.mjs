@@ -1,36 +1,61 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, copyFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from '../scripts/lib/browser.mjs';
-import { writeGallery, inlineGallery } from '../scripts/build.mjs';
+import { writeGallery, inlineGallery, shardData } from '../scripts/build.mjs';
 
 const SAMPLE = fileURLToPath(new URL('./fixtures/data.sample.json', import.meta.url));
 const data = JSON.parse(readFileSync(SAMPLE, 'utf8'));
+
+/** Échantillon au format du build : styles en morceaux (data.css) puis découpé en data.json + a/<id>.json. */
+function shardedSample() {
+  const full = structuredClone(data);
+  full.css = {};
+  for (const [id, st] of Object.entries(full.styles)) {
+    const chunk = (text, k) => { if (!text) return []; full.css[`${id}-${k}`] = text; return [`${id}-${k}`]; };
+    full.styles[id] = { light: chunk(st.cssLight, 'l'), dark: chunk(st.cssDark, 'd'), fontIds: st.fontIds || [], fontLinks: st.fontLinks || [] };
+  }
+  for (const c of full.components) {
+    c.styleId = c.artifactId;
+    if (c.measureOnly) delete c.html;
+  }
+  return shardData(full);
+}
+const { data: packed, shards } = shardedSample();
+// Artifact dont la part renvoie 404 sous /broken/.
+const BROKEN = 'nimbTokens02';
 // Même squelette que celui ajouté par l'outil de publication des artifacts.
 const wrap = (content) => '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>'
   + content + '</body></html>';
 
 let dist, server, base, browser;
+const requests = []; // parts a/*.json demandées au serveur
 
 before(async () => {
   dist = mkdtempSync(join(tmpdir(), 'atlas-gallery-'));
-  copyFileSync(SAMPLE, join(dist, 'data.json'));
+  writeFileSync(join(dist, 'data.json'), JSON.stringify(packed));
+  mkdirSync(join(dist, 'a'));
+  for (const sh of shards) writeFileSync(join(dist, sh.name), sh.json);
   assert.equal(await writeGallery(dist), true);
   const page = readFileSync(join(dist, 'index.html'), 'utf8');
   server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
-    // /nodata/ : même page, sans data.json à côté (état d'erreur).
-    const p = url.pathname.replace(/^\/nodata/, '');
+    // Préfixes : /nodata/ sans data.json ; /noshards/ sans aucun a/*.json ; /broken/ sans la part de BROKEN.
+    const [, prefix = ''] = /^\/(nodata|noshards|broken)(?=\/)/.exec(url.pathname) || [];
+    const p = prefix ? url.pathname.slice(prefix.length + 1) : url.pathname;
+    if (p.startsWith('/a/')) requests.push(p.slice(1));
+    const blocked = (p === '/data.json' && prefix === 'nodata') || (p.startsWith('/a/') && prefix === 'noshards')
+      || (p === `/a/${BROKEN}.json` && prefix === 'broken');
     if (p === '/' || p === '/index.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(wrap(page));
-    } else if (p === '/data.json' && !url.pathname.startsWith('/nodata')) {
+    } else if (!blocked && (p === '/data.json' || /^\/a\/[\w-]+\.json$/.test(p)) && existsSync(join(dist, p))) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(readFileSync(join(dist, 'data.json')));
+      res.end(readFileSync(join(dist, p)));
     } else { res.writeHead(404); res.end('not found'); }
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -57,6 +82,27 @@ async function open(path, { width = 1280, height = 900, colorScheme = 'light' } 
 }
 
 const visibleCount = data.components.filter((c) => !c.measureOnly).length;
+// Le 404 d'une part bloquée est journalisé par le navigateur : seule erreur de console attendue.
+const unexpected = (errors) => errors.filter((e) => !/Failed to load resource.*404/.test(e));
+
+/** Fait défiler toute la page pour déclencher le chargement paresseux, puis attend la fin des chargements. */
+async function loadAll(page) {
+  await page.waitForSelector('.preview');
+  await page.evaluate(async () => {
+    for (let y = 0; y <= document.documentElement.scrollHeight; y += 300) {
+      scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  });
+  await page.waitForFunction(() => !document.querySelector('.preview[data-state="loading"]'));
+}
+
+/** Attend le rendu de la tuile `key8` (amenée près de l'écran). */
+async function readyTile(page, key8) {
+  const card = page.locator(`a.specimen[href="#c-${key8}"]`).first();
+  await card.scrollIntoViewIfNeeded();
+  await page.waitForSelector(`a.specimen[href="#c-${key8}"] .preview[data-state="ready"]`);
+}
 
 test('inlineGallery follows the artifact page contract', () => {
   const html = inlineGallery();
@@ -74,7 +120,7 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
   test(`gallery renders tiles with no console errors at ${vp.width}px`, async () => {
     const { page, errors, close } = await open('/', vp);
     try {
-      await page.waitForSelector('.tile');
+      await loadAll(page);
       const tiles = await page.$$eval('.tile', (els) => els.map((el) => {
         const first = el.shadowRoot && el.shadowRoot.firstElementChild;
         const r = first ? first.getBoundingClientRect() : { width: 0, height: 0 };
@@ -99,7 +145,7 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
 test('one stylesheet per artifact and scheme is shared across tiles, fonts injected once', async () => {
   const { page, close } = await open('/');
   try {
-    await page.waitForSelector('.tile');
+    await loadAll(page);
     const r = await page.evaluate(() => {
       const tiles = [...document.querySelectorAll('.tile')];
       const sheets = new Set(tiles.map((t) => t.shadowRoot.adoptedStyleSheets[0]));
@@ -119,7 +165,7 @@ test('forcing dark on a tile changes the component background', async () => {
   const { page, errors, close } = await open('/');
   try {
     const sel = `.tile[data-key="${KEY_DARK}"]`;
-    await page.waitForSelector(sel);
+    await readyTile(page, KEY_DARK);
     assert.equal(await bgOf(page, sel), 'rgb(255, 255, 255)');
     await page.click('#f-theme [data-value="dark"]');
     assert.equal(await bgOf(page, sel), 'rgb(18, 18, 18)');
@@ -135,7 +181,7 @@ test('auto theme follows the system scheme', async () => {
   const { page, close } = await open('/', { colorScheme: 'dark' });
   try {
     const sel = `.tile[data-key="${KEY_DARK}"]`;
-    await page.waitForSelector(sel);
+    await readyTile(page, KEY_DARK);
     assert.equal(await bgOf(page, sel), 'rgb(18, 18, 18)');
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForFunction((s) => getComputedStyle(document.querySelector(s).shadowRoot.firstElementChild).backgroundColor === 'rgb(255, 255, 255)', sel);
@@ -148,6 +194,7 @@ test('#c-<key8> opens the detail view', async () => {
   try {
     await page.waitForSelector('.detail');
     assert.equal((await page.textContent('h1')).trim(), 'Bouton principal');
+    await page.waitForSelector('.stage-scroll[data-state="ready"]');
     const stage = await page.$eval('.tile-large', (el) => {
       const r = el.shadowRoot.firstElementChild.getBoundingClientRect();
       return { w: r.width, h: r.height, text: el.shadowRoot.textContent };
@@ -198,6 +245,7 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
     const { page, errors, close } = await open('/', vp);
     try {
       const card = `a.specimen[href="#c-${KEY_WIDE}"]`;
+      await readyTile(page, KEY_WIDE);
       await page.waitForSelector(`${card} .scaled:not([hidden])`);
       const r = await page.$eval(card, (a) => {
         const frame = a.querySelector('.preview').getBoundingClientRect();
@@ -211,6 +259,7 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
       assert.match(r.mark, /^réduit à \d+ %$/);
       assert.equal(r.project, 'Orbit');
       // Un petit composant n'est pas réduit.
+      await readyTile(page, KEY_DARK);
       assert.equal(await page.$eval(`a.specimen[href="#c-${KEY_DARK}"] .scaled`, (el) => el.hidden), true);
       if (vp.width === 400) {
         const cols = await page.$eval('.grid', (g) => getComputedStyle(g).gridTemplateColumns.split(' ').length);
@@ -224,7 +273,7 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 400, height: 800 }]) {
 test('the detail stage scrolls horizontally for wide components', async () => {
   const { page, errors, close } = await open(`/#c-${KEY_WIDE}`);
   try {
-    await page.waitForSelector('.stage-scroll .tile-large');
+    await page.waitForSelector('.stage-scroll[data-state="ready"] .tile-large');
     const r = await page.$eval('.stage-scroll', (el) => {
       el.scrollLeft = 300;
       return { left: el.scrollLeft, inert: el.inert, tabindex: el.getAttribute('tabindex'), hostInert: el.querySelector('.tile-large').inert };
@@ -359,6 +408,80 @@ for (const view of ['matrice', 'couleurs', 'mesures']) {
       const { sw, iw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
       assert.ok(sw <= iw, `scrollWidth ${sw} > innerWidth ${iw}`);
       assert.deepEqual(errors, []);
+    } finally { await close(); }
+  });
+}
+
+// ── Parts par artifact (a/<id>.json) : chargement paresseux, mémorisé, tolérant aux échecs ──
+
+test('data.json served to the gallery carries no html nor css', () => {
+  assert.equal(packed.css, undefined);
+  assert.ok(packed.components.every((c) => c.html === undefined));
+  assert.ok(shards.length >= 5);
+});
+
+test('tiles start as sized placeholders and render once their shard is loaded, one request per shard', async () => {
+  requests.length = 0;
+  const { page, errors, close } = await open('/', { width: 400, height: 300 });
+  try {
+    await page.waitForSelector('.preview[data-state="ready"]');
+    await page.waitForTimeout(300);
+    const states = await page.$$eval('.preview', (els) => els.map((e) => [e.dataset.state, e.getBoundingClientRect().height]));
+    assert.ok(states.some(([s]) => s === 'loading'), 'tiles far below the fold are still waiting');
+    for (const [s, hgt] of states) if (s === 'loading') assert.ok(hgt >= 40, `placeholder height ${hgt}`);
+    await loadAll(page);
+    assert.equal(await page.$$eval('.preview[data-state="ready"]', (e) => e.length), visibleCount);
+    assert.equal(new Set(requests).size, requests.length, `each shard fetched once: ${requests}`);
+    assert.deepEqual(unexpected(errors), []);
+  } finally { await close(); }
+});
+
+test('the detail view fetches only its own shard', async () => {
+  requests.length = 0;
+  const { page, errors, close } = await open(`/#c-${KEY_WIDE}`);
+  try {
+    await page.waitForSelector('.stage-scroll[data-state="ready"]');
+    assert.match(await page.textContent('.detail pre'), /<|\w/);
+    assert.deepEqual(requests, ['a/orbitWide08.json']);
+    assert.deepEqual(unexpected(errors), []);
+  } finally { await close(); }
+});
+
+test('a missing shard shows a per-tile error state and leaves the rest of the page working', async () => {
+  const { page, errors, close } = await open('/broken/');
+  try {
+    const broken = `a.specimen[href="#c-${KEY_DARK}"] .preview[data-state="error"]`;
+    await page.locator(`a.specimen[href="#c-${KEY_DARK}"]`).scrollIntoViewIfNeeded();
+    await page.waitForSelector(broken);
+    assert.match(await page.textContent(broken), /Rendu indisponible/);
+    await readyTile(page, KEY_PRIMARY);
+    await loadAll(page);
+    assert.equal(await page.$$eval('.preview[data-state="error"]', (e) => e.length), 1);
+    // Fiche du composant en échec : erreur annoncée, bouton Réessayer, le reste de la fiche est là.
+    await page.click(`a.specimen[href="#c-${KEY_DARK}"]`);
+    await page.waitForSelector('.stage-scroll[data-state="error"] [role="alert"]');
+    assert.match(await page.textContent('.detail'), /Mesures/);
+    await page.click('text=Réessayer');
+    await page.waitForSelector('.stage-scroll[data-state="error"] [role="alert"]');
+    assert.deepEqual(unexpected(errors), []);
+  } finally { await close(); }
+});
+
+for (const view of ['matrice', 'couleurs', 'mesures']) {
+  test(`#${view} renders its chart with every shard blocked`, async () => {
+    requests.length = 0;
+    const { page, errors, close } = await open(`/noshards/#${view}`);
+    try {
+      await page.waitForSelector('.viz svg');
+      if (view === 'matrice') assert.ok(await page.$$eval('.mx-count', (c) => c.length) > 0);
+      if (view === 'couleurs') {
+        await page.focus('.sw-dot[data-hex="#2f6bff"]');
+        await page.waitForSelector(`.viz-detail a.specimen[href="#c-${KEY_PRIMARY}"] .preview[data-state="error"]`);
+        assert.ok(await page.$$eval('.viz-detail .preview[data-state="measure"]', (e) => e.length) > 0, 'measureOnly drawn from metrics');
+      }
+      if (view === 'mesures') assert.ok(await page.$$eval('.st-dot', (d) => d.length) > 0);
+      if (view !== 'couleurs') assert.deepEqual(requests, [], 'charts need no shard');
+      assert.deepEqual(unexpected(errors), []);
     } finally { await close(); }
   });
 }

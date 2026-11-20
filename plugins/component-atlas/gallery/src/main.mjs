@@ -6,7 +6,7 @@ import {
 } from './logic.mjs';
 import {
   h, plural, renderTypesView, renderDetail, renderUnanalysed, themeSwitch, refitPreviews,
-  renderMatrixView, renderColorsView, renderMetricsView,
+  renderMatrixView, renderColorsView, renderMetricsView, forgetLazy,
 } from './views.mjs';
 
 // Vues à onglet. `measureOnly` : la vue reçoit aussi les composants relevés pour mesure seulement.
@@ -42,9 +42,60 @@ function currentFilters() {
 
 function ctx() {
   return {
-    data: app.data, byArtifact: app.byArtifact, byKey: app.byKey, renderTheme: app.renderTheme, state: app.viewState,
-    clearFilters, goTypes, rerender: render,
+    data: app.data, byArtifact: app.byArtifact, byKey: app.byKey, state: app.viewState,
+    // Getter : une tuile montée plus tard (chargement paresseux) prend le thème du moment.
+    get renderTheme() { return app.renderTheme; },
+    clearFilters, goTypes, rerender: render, load: loadComponent, retry: retryComponent,
   };
+}
+
+// ── Fichiers de rendu par artifact (a/<artifactId>.json = {html, css, fonts}) ──
+// data.json ne porte ni HTML ni CSS : chaque artifact a ses parts, chargées à la demande
+// (tuile proche de l'écran, fiche ouverte, aperçu survolé). Une seule requête par part.
+const SHARDS = new Map(); // chemin → Promise
+
+function absorbShard(shard) {
+  const d = app.data;
+  Object.assign(d.css, (shard && shard.css) || {});
+  Object.assign(d.fonts, (shard && shard.fonts) || {});
+  for (const [key, html] of Object.entries((shard && shard.html) || {})) {
+    const comp = app.byKey.get(key);
+    if (comp) comp.html = html;
+  }
+}
+
+function fetchShard(file) {
+  let p = SHARDS.get(file);
+  if (!p) {
+    p = fetch(file, { cache: 'no-cache' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`${file} est introuvable (HTTP ${res.status}).`);
+        return res.json();
+      })
+      .then(absorbShard);
+    p.catch(() => { p.failed = true; });
+    SHARDS.set(file, p);
+  }
+  return p;
+}
+
+/** Promesse résolue quand le HTML et le CSS du composant sont disponibles (rejet : fichier illisible). */
+function loadComponent(comp) {
+  if (!comp || comp.measureOnly || typeof comp.html === 'string') return Promise.resolve(comp);
+  const art = app.byArtifact.get(comp.artifactId);
+  const files = (art && art.shards) || [];
+  if (!files.length) return Promise.reject(new Error('Aucun fichier de rendu publié pour cet artifact.'));
+  return Promise.all(files.map(fetchShard)).then(() => {
+    if (typeof comp.html !== 'string') throw new Error('Ce composant manque dans le fichier de son artifact.');
+    return comp;
+  });
+}
+
+/** Nouvel essai : oublie les parts en échec de l'artifact du composant, puis recharge. */
+function retryComponent(comp) {
+  const art = comp && app.byArtifact.get(comp.artifactId);
+  for (const f of (art && art.shards) || []) if (SHARDS.get(f)?.failed) SHARDS.delete(f);
+  return loadComponent(comp);
 }
 
 /** Ouvre la vue Par type filtrée sur un type et un projet (clic sur une case de la matrice). */
@@ -110,6 +161,7 @@ function render() {
   if (prev !== 'detail') app.scroll[prev] = scrollY;
   // Rendu de la même vue (contrôle propre à la vue) : on garde le défilement et le focus.
   const focusId = view.contains(document.activeElement) ? document.activeElement.closest('[id]')?.id : null;
+  forgetLazy(view);
   view.replaceChildren();
   view.removeAttribute('aria-busy');
 
@@ -168,6 +220,8 @@ async function boot() {
     return;
   }
   app.data = data;
+  data.css = data.css || {};
+  data.fonts = data.fonts || {};
   app.comps = enrichComponents(data.components || [], data.artifacts || []);
   app.byArtifact = new Map((data.artifacts || []).map((a) => [a.id, a]));
   app.byKey = new Map(app.comps.map((c) => [c.key, c]));

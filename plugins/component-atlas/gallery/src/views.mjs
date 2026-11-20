@@ -78,6 +78,72 @@ export function refitPreviews(container) {
   for (const frame of container.querySelectorAll('.preview')) frame.__caFit?.(true);
 }
 
+// ── Chargement paresseux : une tuile ne demande le fichier de son artifact qu'à l'approche de l'écran ──
+const LAZY_MARGIN = '600px 0px';
+const LAZY = typeof IntersectionObserver === 'function'
+  ? new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      LAZY.unobserve(e.target);
+      const go = e.target.__caLoad;
+      delete e.target.__caLoad;
+      go?.();
+    }
+  }, { rootMargin: LAZY_MARGIN })
+  : null;
+
+function whenNear(el, fn) {
+  if (!LAZY) { queueMicrotask(fn); return; }
+  el.__caLoad = fn;
+  LAZY.observe(el);
+}
+
+/** Cesse d'observer les tuiles encore en attente sous `container` (avant de vider une vue). */
+export function forgetLazy(container) {
+  if (!LAZY) return;
+  for (const el of container.querySelectorAll('.preview[data-state="loading"]')) {
+    if (el.__caLoad) { LAZY.unobserve(el); delete el.__caLoad; }
+  }
+}
+
+/** Hauteur provisoire d'un aperçu, estimée depuis les mesures (avant le rendu réel). */
+function placeholderHeight(comp, maxH) {
+  const m = comp.metrics && comp.metrics.light;
+  if (!m || !(m.height > 0)) return Math.min(maxH, 96);
+  const scale = Math.min(1, 280 / Math.max(1, m.width || 280), maxH / m.height);
+  return Math.max(40, Math.min(maxH, Math.ceil(m.height * scale)));
+}
+
+function tileError(frame, message) {
+  frame.dataset.state = 'error';
+  frame.style.height = '';
+  frame.append(h('div.tile-error', { role: 'note' },
+    h('span.tile-error-title', { text: 'Rendu indisponible' }),
+    h('span', { text: message || 'Le fichier de cet artifact n’a pas pu être chargé.' })));
+}
+
+/**
+ * Composant relevé pour la mesure seulement : pas de HTML publié. Gabarit dessiné depuis
+ * ses mesures (fond, bordure, rayon, taille, couleur et corps du texte).
+ */
+function measureProxy(comp, maxH) {
+  const m = (comp.metrics && comp.metrics.light) || {};
+  const w = Math.max(8, Math.round(m.width || 40));
+  const ht = Math.max(8, Math.round(m.height || 24));
+  const scale = Math.min(1, 240 / w, (maxH - 40) / ht);
+  const box = h('span.mproxy-box');
+  box.style.width = `${Math.max(6, Math.round(w * scale))}px`;
+  box.style.height = `${Math.max(6, Math.round(ht * scale))}px`;
+  if (m.bg) box.style.backgroundColor = m.bg;
+  if (m.border) { box.style.borderStyle = 'solid'; box.style.borderColor = m.border; }
+  if (Number.isFinite(m.radius)) box.style.borderRadius = `${Math.round(Math.min(m.radius, 999) * scale)}px`;
+  if (m.fg) box.style.color = m.fg;
+  if (Number.isFinite(m.fontSize)) box.style.fontSize = `${Math.max(8, Math.round(m.fontSize * Math.max(scale, 0.6)))}px`;
+  if (Number.isFinite(m.fontWeight)) box.style.fontWeight = String(m.fontWeight);
+  box.textContent = ht * scale >= 14 ? 'Aa' : '';
+  return h('div.mproxy', null, box, h('span.mproxy-note', { text: 'Mesure seule' }));
+}
+
 function specimen(comp, ctx, maxH = PREVIEW_MAX_H) {
   const stage = h('div.tile', { 'data-key': comp.key8, inert: true, 'aria-hidden': 'true' });
   const frame = h('div.preview', null, stage);
@@ -93,8 +159,21 @@ function specimen(comp, ctx, maxH = PREVIEW_MAX_H) {
         comp.occurrences > 1 ? h('span.occ', { text: `×${comp.occurrences}`, title: plural(comp.occurrences, 'occurrence', 'occurrences') }) : null,
         m ? h('span.dim', { text: `${px(m.width)}×${px(m.height)}` }) : null,
         mark)));
-  mountTile(stage, comp, ctx, ctx.renderTheme);
-  queueMicrotask(() => fitPreview(frame, stage, mark, maxH));
+  if (comp.measureOnly) {
+    frame.dataset.state = 'measure';
+    stage.append(measureProxy(comp, maxH));
+    return card;
+  }
+  frame.dataset.state = 'loading';
+  frame.style.height = `${placeholderHeight(comp, maxH)}px`;
+  whenNear(frame, () => {
+    ctx.load(comp).then(() => {
+      if (!frame.isConnected) return;
+      frame.dataset.state = 'ready';
+      mountTile(stage, comp, ctx, ctx.renderTheme);
+      fitPreview(frame, stage, mark, maxH);
+    }, (e) => tileError(frame, e && e.message));
+  });
   return card;
 }
 
@@ -196,20 +275,33 @@ export function renderDetail(container, comp, ctx) {
     return;
   }
   const art = ctx.byArtifact.get(comp.artifactId);
-  const styles = stylesOf(ctx.data, comp);
+  const measure = !!comp.measureOnly;
   let theme = ctx.renderTheme;
+  let ready = false;
   const scheme = () => (theme === 'auto' ? pageScheme() : theme);
-  const cssFor = () => (scheme() === 'dark' ? styles.cssDark : styles.cssLight) || '';
+  const cssFor = () => {
+    if (!ready) return '';
+    const styles = stylesOf(ctx.data, comp);
+    return (scheme() === 'dark' ? styles.cssDark : styles.cssLight) || '';
+  };
   const cssLabel = () => (scheme() === 'dark' ? 'sombre' : 'clair');
 
   const stage = h('div.tile.tile-large', { 'data-key': comp.key8, inert: true, 'aria-hidden': 'true' });
   // Conteneur de défilement non inerte : l'hôte inerte ne peut pas défiler lui-même.
-  const scroller = h('div.stage-scroll', { tabindex: '0', role: 'region', 'aria-label': `Rendu de ${comp.name}` }, stage);
+  const scroller = h('div.stage-scroll', { tabindex: '0', role: 'region', 'aria-label': `Rendu de ${comp.name}`, 'data-state': measure ? 'measure' : 'loading' }, stage);
   const sizeStage = () => naturalSize(stage, scroller.clientWidth);
-  const cssPre = h('pre.code', { tabindex: '0' }, h('code', { text: cssFor() }));
-  const htmlPre = h('pre.code', { tabindex: '0' }, h('code', { text: comp.html }));
+  const LOADING = 'Chargement du rendu…';
+  const cssPre = h('pre.code', { tabindex: '0' }, h('code', { text: measure ? '' : LOADING }));
+  const htmlPre = h('pre.code', { tabindex: '0' }, h('code', { text: measure ? '' : LOADING }));
   const cssTitle = h('h2', { text: `CSS scopé (${cssLabel()})` });
-  const refreshCss = () => { cssPre.firstChild.textContent = cssFor(); cssTitle.textContent = `CSS scopé (${cssLabel()})`; };
+  const refreshCss = () => {
+    if (ready) cssPre.firstChild.textContent = cssFor();
+    cssTitle.textContent = `CSS scopé (${cssLabel()})`;
+  };
+  const copyHtml = copyButton('Copier le HTML', () => comp.html || '', htmlPre);
+  const copyCss = copyButton('Copier le CSS', cssFor, cssPre);
+  copyHtml.disabled = true;
+  copyCss.disabled = true;
 
   const sources = comp.sources.map((s) => {
     const a = ctx.byArtifact.get(s.artifactId);
@@ -218,6 +310,12 @@ export function renderDetail(container, comp, ctx) {
       h('span.muted', { text: ` · ${a ? a.project : ''}${a ? ` · ${formatDate(a.updated)}` : ''}` }),
       s.occurrences > 1 ? h('span.occ', { text: ` ×${s.occurrences}` }) : null);
   });
+
+  const codePanels = measure
+    ? [h('section.panel', null, h('h2', { text: 'Code' }),
+      h('p.muted', { text: 'Composant relevé pour la mesure seulement : son HTML et son CSS ne sont pas publiés dans l’atlas. Ouvrez l’artifact source pour le voir en contexte.' }))]
+    : [h('section.panel', null, h('div.panel-head', null, h('h2', { text: 'HTML' }), copyHtml), htmlPre),
+      h('section.panel', null, h('div.panel-head', null, cssTitle, copyCss), cssPre)];
 
   container.append(h('article.detail', { 'aria-labelledby': 'detail-title' },
     h('a.back', { href: '#types', text: '← Retour à la galerie' }),
@@ -229,7 +327,7 @@ export function renderDetail(container, comp, ctx) {
     h('div.detail-stage', null,
       h('div.stage-bar', null,
         h('span.muted', { text: comp.occurrences > 1 ? `${comp.occurrences} occurrences` : '1 occurrence' }),
-        themeSwitch('detail-theme', theme, (v) => { theme = v; setSnippetTheme(stage, v); refreshCss(); sizeStage(); })),
+        measure ? null : themeSwitch('detail-theme', theme, (v) => { theme = v; setSnippetTheme(stage, v); refreshCss(); if (ready) sizeStage(); })),
       scroller),
     h('div.detail-cols', null,
       h('section.panel', null, h('h2', { text: 'Mesures' }), metricsTable(comp.metrics || {})),
@@ -237,15 +335,41 @@ export function renderDetail(container, comp, ctx) {
         h('h2', { text: comp.sources.length > 1 ? 'Sources' : 'Source' }),
         h('ul.sources', null, sources),
         art ? h('a.btn', { href: art.url, target: '_blank', rel: 'noopener', text: "Ouvrir l'artifact source" }) : null)),
-    h('section.panel', null,
-      h('div.panel-head', null, h('h2', { text: 'HTML' }), copyButton('Copier le HTML', () => comp.html, htmlPre)),
-      htmlPre),
-    h('section.panel', null,
-      h('div.panel-head', null, cssTitle, copyButton('Copier le CSS', cssFor, cssPre)),
-      cssPre)));
-  mountTile(stage, comp, ctx, theme);
-  sizeStage();
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (stage.isConnected) sizeStage(); });
+    ...codePanels));
+
+  if (measure) { stage.append(measureProxy(comp, 320)); return; }
+
+  const status = h('div.stage-status', { role: 'status' }, h('span.muted', { text: LOADING }));
+  scroller.append(status);
+  const show = () => {
+    if (!stage.isConnected) return;
+    ready = true;
+    status.remove();
+    scroller.dataset.state = 'ready';
+    htmlPre.firstChild.textContent = comp.html;
+    copyHtml.disabled = false;
+    copyCss.disabled = false;
+    mountTile(stage, comp, ctx, theme);
+    refreshCss();
+    sizeStage();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (stage.isConnected) sizeStage(); });
+  };
+  const fail = (e) => {
+    if (!stage.isConnected) return;
+    scroller.dataset.state = 'error';
+    const msg = (e && e.message) || 'Le fichier de cet artifact n’a pas pu être chargé.';
+    for (const pre of [htmlPre, cssPre]) pre.firstChild.textContent = 'Indisponible : le rendu n’a pas pu être chargé.';
+    status.replaceChildren(h('div.tile-error.tile-error-large', { role: 'alert' },
+      h('span.tile-error-title', { text: 'Rendu indisponible' }),
+      h('span', { text: msg }),
+      h('button.btn.btn-small', { type: 'button', text: 'Réessayer', onclick: () => {
+        scroller.dataset.state = 'loading';
+        status.replaceChildren(h('span.muted', { text: LOADING }));
+        for (const pre of [htmlPre, cssPre]) pre.firstChild.textContent = LOADING;
+        ctx.retry(comp).then(show, fail);
+      } })));
+  };
+  ctx.load(comp).then(show, fail);
 }
 
 export function renderUnanalysed(container, artifacts, notes) {

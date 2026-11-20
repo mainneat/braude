@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { buildData, splitFontFaces, assertSize } from '../scripts/build.mjs';
+import { buildData, splitFontFaces, assertSize, shardData } from '../scripts/build.mjs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const M = (bg = '#fff') => ({ bg, fg: '#000', border: null, radius: 4, fontFamily: 'Inter', fontSize: 14, fontWeight: 500, width: 80, height: 32, paddingX: 8, paddingY: 4 });
 const cand = (index, html, extra = {}) => ({ index, kind: 'control', tag: 'button', text: 't', context: '', html, occurrences: 1, metrics: { light: M(), dark: M('#000') }, colors: ['#fff'], ...extra });
@@ -235,4 +237,88 @@ test('style groups: one style entry per group, chunks shared, components point t
   assert.equal(Object.keys(data.css).length, 3);
   assert.equal(data.components.find((c) => c.name === 'A').styleId, 'x:g1');
   assert.equal(data.components.find((c) => c.name === 'B').styleId, 'x:g2');
+});
+
+// ── Découpage : data.json sans HTML ni CSS, parts a/<artifactId>.json ──
+
+async function twoArtifacts() {
+  const SEP = '\n/*ca:chunk*/\n';
+  return setup(async (d) => [
+    await art(d, 'p1', { cands: [cand(0, '<button>Un</button>'), cand(1, '<button>Deux</button>'), cand(2, '<i>m</i>', { measureOnly: true })],
+      styles: { css: '', cssLight: ['.a{color:red}', '.b{}'].join(SEP), cssDark: '.d{}', fontFaceCss: FACE('Fam'), fontLinks: [] },
+      classified: ok('P', [{ index: 0, keep: true, type: 'button', name: 'Un' }, { index: 1, keep: true, type: 'button', name: 'Deux' }]) }),
+    await art(d, 'p2', { updated: '2026-10-01', cands: [cand(0, '<button>Trois</button>'), cand(1, '<button>Un</button>')],
+      classified: ok('P', [{ index: 0, keep: true, type: 'button', name: 'Trois' }, { index: 1, keep: true, type: 'button', name: 'Un' }]) }),
+  ]);
+}
+
+test('measureOnly components carry no html', async () => {
+  const dir = await twoArtifacts();
+  const full = await buildData({ dir, now: 'N' });
+  const m = full.components.filter((c) => c.measureOnly);
+  assert.equal(m.length, 1);
+  assert.equal(m[0].html, undefined);
+});
+
+test('shardData: data.json has no html nor css; each shard holds html of its components and its css', async () => {
+  const dir = await twoArtifacts();
+  const full = await buildData({ dir, now: 'N' });
+  const { data, shards } = shardData(full);
+  const json = JSON.stringify(data);
+  assert.equal(data.css, undefined);
+  assert.equal(data.fonts, undefined);
+  assert.doesNotMatch(json, /<button|color:red|@font-face/);
+  assert.ok(data.components.every((c) => c.html === undefined));
+  assert.deepEqual(shards.map((s) => s.name).sort(), ['a/p1.json', 'a/p2.json']);
+  assert.deepEqual(data.artifacts.find((a) => a.id === 'p1').shards, ['a/p1.json']);
+  const body = Object.fromEntries(shards.map((s) => [s.artifactId, JSON.parse(s.json)]));
+  for (const c of full.components) {
+    if (c.measureOnly) {
+      for (const b of Object.values(body)) assert.equal(b.html[c.key], undefined, 'no html for measureOnly');
+    } else {
+      assert.equal(body[c.artifactId].html[c.key], c.html, `html of ${c.name} in its primary artifact shard`);
+    }
+  }
+  // « Un » apparaît dans p1 et p2 : son HTML n'est que dans la part de p1 (artifact principal).
+  const un = full.components.find((c) => c.name === 'Un');
+  assert.equal(body.p2.html[un.key], undefined);
+  // Morceaux CSS et polices du groupe de styles dans la part de l'artifact ; data.json garde les ids.
+  for (const id of [...data.styles['p1:main'].light, ...data.styles['p1:main'].dark]) assert.equal(typeof body.p1.css[id], 'string');
+  assert.equal(body.p1.fonts[data.styles['p1:main'].fontIds[0]], FACE('Fam'));
+  // Format compact : sources implicites, mesures sombres réduites aux différences, groupe de styles.
+  const d1 = data.components.find((c) => c.name === 'Deux');
+  assert.equal(d1.sources, undefined);
+  assert.equal(d1.sg, 'main');
+  assert.deepEqual(d1.metrics.dark, { bg: '#000' });
+  assert.equal(d1.metrics.light.border, undefined);
+  assert.equal(data.components.find((c) => c.name === 'Un').sources.length, 2);
+});
+
+test('shardData splits an artifact over the size threshold into a/<id>.json, a/<id>-2.json…', async () => {
+  const dir = await setup(async (d) => [
+    await art(d, 'big', { cands: [0, 1, 2, 3].map((i) => cand(i, `<p>${String(i).repeat(300)}</p>`)),
+      classified: ok('P', [0, 1, 2, 3].map((i) => ({ index: i, keep: true, type: 'card', name: `C${i}` }))) }),
+  ]);
+  const full = await buildData({ dir, now: 'N' });
+  const { data, shards } = shardData(full, { maxShardBytes: 700 });
+  const names = data.artifacts[0].shards;
+  assert.ok(names.length >= 2, names.join());
+  assert.equal(names[0], 'a/big.json');
+  assert.equal(names[1], 'a/big-2.json');
+  assert.deepEqual(shards.map((s) => s.name), names);
+  for (const s of shards) assert.ok(Buffer.byteLength(s.json) <= 700 || Object.keys(JSON.parse(s.json).html).length === 1);
+  const html = Object.assign({}, ...shards.map((s) => JSON.parse(s.json).html));
+  for (const c of full.components) assert.equal(html[c.key], c.html);
+});
+
+test('build CLI writes data.json and the shards, and clears stale shards from dist/a', async () => {
+  const dir = await twoArtifacts();
+  await write(dir, 'dist/a/gone.json', '{}');
+  const script = fileURLToPath(new URL('../scripts/build.mjs', import.meta.url));
+  const r = spawnSync('node', [script, '--dir', dir], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /a\/\*\.json : 2 fichiers/);
+  assert.deepEqual((await fs.readdir(path.join(dir, 'dist', 'a'))).sort(), ['p1.json', 'p2.json']);
+  const data = JSON.parse(await fs.readFile(path.join(dir, 'dist', 'data.json'), 'utf8'));
+  assert.ok(data.components.every((c) => c.html === undefined));
 });

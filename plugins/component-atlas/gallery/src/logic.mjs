@@ -56,9 +56,24 @@ export function parseRoute(hash) {
   return { view: ROUTE_VIEWS.has(h) ? h : 'types' };
 }
 
+/**
+ * Reconstitue un composant de data.json (format compact écrit par build.mjs) : `sources` implicite,
+ * `isDS`, `styleId` depuis son groupe `sg`, mesures sombres complétées par les claires.
+ * Sans effet sur un composant déjà complet.
+ */
+export function unpackComponent(c) {
+  const out = { ...c, isDS: !!c.isDS };
+  if (!out.sources) out.sources = [{ artifactId: c.artifactId, occurrences: c.occurrences ?? 1 }];
+  if (!out.styleId && c.sg !== undefined) out.styleId = `${c.artifactId}:${c.sg}`;
+  delete out.sg;
+  const m = c.metrics;
+  if (m && m.light) out.metrics = { light: m.light, dark: { ...m.light, ...(m.dark || {}) } };
+  return out;
+}
+
 export function enrichComponents(components, artifacts) {
   const updated = new Map(artifacts.map((a) => [a.id, a.updated]));
-  return components.map((c) => {
+  return components.map(unpackComponent).map((c) => {
     let latest = '';
     for (const s of c.sources ?? []) {
       const u = updated.get(s.artifactId) ?? '';

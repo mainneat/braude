@@ -80,11 +80,15 @@ export function stylesOf(data, comp) {
   const id = comp.styleId && data.styles && data.styles[comp.styleId] ? comp.styleId : comp.artifactId;
   if (memo.has(id)) return memo.get(id);
   const st = (data.styles && data.styles[id]) || {};
-  const join = (ids) => (ids || []).map((i) => (data.css && data.css[i]) || '').join('\n');
-  const out = Array.isArray(st.light) || Array.isArray(st.dark)
+  const chunked = Array.isArray(st.light) || Array.isArray(st.dark);
+  const ids = chunked ? [...(st.light || []), ...(st.dark || [])] : [];
+  // Morceaux pas encore chargés (fichier a/<artifact>.json en attente) : résultat non mémorisé.
+  const complete = ids.every((i) => data.css && typeof data.css[i] === 'string');
+  const join = (list) => (list || []).map((i) => (data.css && data.css[i]) || '').join('\n');
+  const out = chunked
     ? { cssLight: join(st.light), cssDark: join(st.dark), fontIds: st.fontIds || [], fontLinks: st.fontLinks || [] }
     : st;
-  memo.set(id, out);
+  if (complete) memo.set(id, out);
   return out;
 }
 

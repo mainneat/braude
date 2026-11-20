@@ -253,6 +253,45 @@ h1, h2, h3, p { margin: 0; }
   letter-spacing: 0.04em;
 }
 
+/* Aperçu en attente de son fichier a/<artifact>.json, en échec, ou gabarit d'une mesure seule */
+.preview[data-state="loading"] { background: var(--ca-sunken); animation: pulse 1.4s ease-in-out infinite alternate; }
+.tile-error {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 12px;
+  border-left: 3px solid var(--ca-err);
+  background: var(--ca-sunken);
+  font-size: 12px;
+  color: var(--ca-ink-2);
+}
+.tile-error-title { font-size: 13px; font-weight: 600; color: var(--ca-err); }
+.tile-error-large { margin: 16px; gap: 6px; align-items: flex-start; }
+.stage-status { padding: 16px; }
+.stage-scroll[data-state="loading"] { min-height: 120px; background: var(--ca-sunken); animation: pulse 1.4s ease-in-out infinite alternate; }
+.mproxy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 12px;
+  background: var(--ca-sunken);
+  color: var(--ca-ink-3);
+}
+.mproxy-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--ca-line-strong);
+  font-family: var(--ca-font-sans);
+  line-height: 1;
+  overflow: hidden;
+}
+.mproxy-note { font: 11px var(--ca-font-mono); }
+@media (prefers-reduced-motion: reduce) {
+  .preview[data-state="loading"], .stage-scroll[data-state="loading"] { animation: none; }
+}
+
 /* États */
 .state, .empty { padding: 48px 0; max-width: 560px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .state-title { font-size: 16px; font-weight: 600; }

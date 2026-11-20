@@ -52,11 +52,107 @@ export function assertSize(data, json) {
       for (const f of st.fontIds || []) n += (data.fonts[f] || '').length;
     }
     for (const c of chunks) n += (data.css?.[c] || '').length;
-    for (const c of data.components) if (c.artifactId === a.id) n += c.html.length;
+    for (const c of data.components) if (c.artifactId === a.id) n += JSON.stringify(c).length;
     return { title: a.title, n };
   }).sort((x, y) => y.n - x.n).slice(0, 5);
   throw new Error(`data.json dépasse 15 Mo (${(size / 1048576).toFixed(1)} Mo). Plus gros artifacts :\n` +
     per.map((p) => `  - ${p.title} (~${(p.n / 1048576).toFixed(1)} Mo)`).join('\n'));
+}
+
+export const MAX_SHARD = 4 * 1024 * 1024;
+const MAX_FILE = 16 * 1024 * 1024;
+
+/** Mesures sombres réduites à ce qui diffère du clair ; valeurs nulles retirées (la galerie les reconstitue). */
+function packMetrics(metrics) {
+  if (!metrics || typeof metrics !== 'object') return metrics;
+  const clean = (m) => Object.fromEntries(Object.entries(m || {}).filter(([, v]) => v !== null && v !== undefined));
+  const light = clean(metrics.light);
+  const out = { light };
+  if (metrics.dark) {
+    const dark = {};
+    for (const [k, v] of Object.entries(metrics.dark)) if (v !== light[k] && !(v === null && light[k] === undefined)) dark[k] = v;
+    if (Object.keys(dark).length) out.dark = dark;
+  }
+  return out;
+}
+
+/**
+ * Composant tel qu'écrit dans data.json : sans HTML, champs implicites omis (reconstitués par
+ * unpackComponent de gallery/src/logic.mjs) : `sources` à une seule source, `isDS` faux, `colors`
+ * (déductibles des mesures), `styleId` réduit à son groupe (`sg`) quand il appartient à l'artifact.
+ */
+function packComponent(c) {
+  const { html, colors, ...out } = c;
+  out.metrics = packMetrics(c.metrics);
+  if (typeof c.styleId === 'string' && c.styleId.startsWith(`${c.artifactId}:`)) {
+    delete out.styleId;
+    out.sg = c.styleId.slice(c.artifactId.length + 1);
+  }
+  const s = c.sources || [];
+  if (s.length === 1 && s[0].artifactId === c.artifactId && s[0].occurrences === c.occurrences) delete out.sources;
+  if (!out.isDS) delete out.isDS;
+  return out;
+}
+
+/**
+ * Sépare les données de la galerie : `data` (data.json : filtres, matrice, nuancier, mesures, légendes —
+ * sans HTML ni texte CSS ni @font-face) et `shards` (dist/a/<artifactId>.json = {html, css, fonts} :
+ * HTML des composants dont l'artifact principal est celui-ci, morceaux CSS et polices de ses groupes de styles).
+ * Un artifact qui dépasse `maxShardBytes` est découpé en a/<id>.json, a/<id>-2.json… ; la liste va dans
+ * `artifacts[].shards` (la galerie charge toutes les parts d'un artifact avant d'en rendre un composant).
+ */
+export function shardData(full, { maxShardBytes = MAX_SHARD } = {}) {
+  const per = new Map(); // artifactId → [[section, id, texte]…]
+  const add = (aid, section, id, text) => {
+    if (!per.has(aid)) per.set(aid, { seen: new Set(), items: [] });
+    const p = per.get(aid);
+    const k = `${section}:${id}`;
+    if (p.seen.has(k) || typeof text !== 'string') return;
+    p.seen.add(k);
+    p.items.push([section, id, text]);
+  };
+  const ownerOf = (sid) => String(sid).split(':')[0];
+  const styles = {};
+  for (const [sid, st] of Object.entries(full.styles || {})) {
+    const aid = ownerOf(sid);
+    for (const c of [...(st.light || []), ...(st.dark || [])]) add(aid, 'css', c, full.css?.[c]);
+    for (const f of st.fontIds || []) add(aid, 'fonts', f, full.fonts?.[f]);
+    styles[sid] = st;
+  }
+  for (const c of full.components) if (!c.measureOnly && typeof c.html === 'string') add(c.artifactId, 'html', c.key, c.html);
+
+  const shards = [];
+  const shardLists = new Map();
+  for (const [aid, { items }] of per) {
+    const parts = [];
+    let cur = null;
+    for (const [section, id, text] of items) {
+      const n = Buffer.byteLength(JSON.stringify(id)) + Buffer.byteLength(JSON.stringify(text)) + 2;
+      if (!cur || (cur.bytes + n > maxShardBytes && cur.bytes > 40)) {
+        cur = { body: { html: {}, css: {}, fonts: {} }, bytes: 40 };
+        parts.push(cur);
+      }
+      cur.body[section][id] = text;
+      cur.bytes += n;
+    }
+    const names = parts.map((_, k) => (k === 0 ? `a/${aid}.json` : `a/${aid}-${k + 1}.json`));
+    parts.forEach((p, k) => {
+      const json = JSON.stringify(p.body);
+      if (Buffer.byteLength(json) > MAX_FILE) throw new Error(`${names[k]} dépasse 16 Mo : un composant de « ${aid} » est trop lourd.`);
+      shards.push({ name: names[k], artifactId: aid, json });
+    });
+    shardLists.set(aid, names);
+  }
+
+  const data = {
+    ...full,
+    artifacts: full.artifacts.map((a) => ({ ...a, shards: shardLists.get(a.id) || [] })),
+    styles,
+    components: full.components.map(packComponent),
+  };
+  delete data.css;
+  delete data.fonts;
+  return { data, shards };
 }
 
 export async function buildData({ dir, now }) {
@@ -140,15 +236,16 @@ export async function buildData({ dir, now }) {
       let comp = byKey.get(key);
       if (!comp) {
         const styleId = `${inv.id}:${groups[c.styleGroup] ? c.styleGroup : firstGroup}`;
-        comp = { key, type, name, project: entry.project, isDS: c.kind === 'ds', sources: [], occurrences: 0, artifactId: inv.id, styleId, html: c.html, metrics: c.metrics, colors: c.colors || [] };
+        comp = { key, type, name, project: entry.project, isDS: c.kind === 'ds', sources: [], occurrences: 0, artifactId: inv.id, styleId, metrics: c.metrics, colors: c.colors || [] };
         if (c.description) comp.description = c.description;
-        if (measure) comp.measureOnly = true;
+        // measureOnly : jamais rendu dans la galerie, donc sans HTML.
+        if (measure) comp.measureOnly = true; else comp.html = c.html;
         byKey.set(key, comp);
         data.components.push(comp);
       } else {
         if (c.kind === 'ds') comp.isDS = true;
         if (!comp.description && c.description) comp.description = c.description;
-        if (!measure) delete comp.measureOnly;
+        if (!measure && comp.measureOnly) { delete comp.measureOnly; comp.html = c.html; }
       }
       comp.occurrences += occ;
       const src = comp.sources.find((s) => s.artifactId === inv.id);
@@ -181,17 +278,29 @@ export async function writeGallery(distDir) {
   return true;
 }
 
+function arg(name, fallback) {
+  const i = process.argv.indexOf(name);
+  return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
+
 async function main() {
-  const i = process.argv.indexOf('--dir');
-  const dir = i > -1 && process.argv[i + 1] ? process.argv[i + 1] : '.component-atlas';
-  const data = await buildData({ dir, now: new Date().toISOString() });
+  const dir = arg('--dir', '.component-atlas');
+  const maxShardBytes = Number(arg('--max-shard', MAX_SHARD));
+  const full = await buildData({ dir, now: new Date().toISOString() });
+  const { data, shards } = shardData(full, { maxShardBytes });
   const json = JSON.stringify(data);
   assertSize(data, json);
   const dist = path.join(dir, 'dist');
-  await fs.mkdir(dist, { recursive: true });
+  // dist/a reflète exactement le build courant : les parts obsolètes disparaissent (publish-plan les retire).
+  await fs.rm(path.join(dist, 'a'), { recursive: true, force: true });
+  await fs.mkdir(path.join(dist, 'a'), { recursive: true });
   await fs.writeFile(path.join(dist, 'data.json'), json);
+  for (const s of shards) await fs.writeFile(path.join(dist, s.name), s.json);
   await writeGallery(dist);
-  console.log(`data.json : ${data.artifacts.length} artifacts, ${data.components.length} composants, ${(Buffer.byteLength(json) / 1048576).toFixed(2)} Mo`);
+  const mb = (n) => (n / 1048576).toFixed(2);
+  const sizes = shards.map((s) => Buffer.byteLength(s.json));
+  console.log(`data.json : ${data.artifacts.length} artifacts, ${data.components.length} composants, ${mb(Buffer.byteLength(json))} Mo`);
+  console.log(`a/*.json : ${shards.length} fichiers, ${mb(sizes.reduce((x, y) => x + y, 0))} Mo au total, le plus gros ${mb(Math.max(0, ...sizes))} Mo`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
