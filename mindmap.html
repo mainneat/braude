@@ -1,0 +1,205 @@
+<title>Atlas des artifacts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: mind map horizontale — racine au centre, projets en deux colonnes, connecteurs SVG courbes */
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --fg:#17191a; --muted:#6a6f6c; --line:#c9ccc6; --soft:#e7e9e4;
+  --c1:#2f6bff; --c2:#d9480f; --c3:#0b8a5f; --c4:#8a3ffc; --c5:#b8860b; --c6:#c2255c; --c7:#1098ad; --c8:#5c6370;
+  --display:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --body:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111314; --surface:#1a1d1e; --fg:#eceeea; --muted:#9aa09c; --line:#3a3f3d; --soft:#24282a;
+  --c1:#7aa2ff; --c2:#ff8a5c; --c3:#45c999; --c4:#b58cff; --c5:#e3b341; --c6:#f06595; --c7:#4fc3d4; --c8:#a0a7b4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111314; --surface:#1a1d1e; --fg:#eceeea; --muted:#9aa09c; --line:#3a3f3d; --soft:#24282a;
+  --c1:#7aa2ff; --c2:#ff8a5c; --c3:#45c999; --c4:#b58cff; --c5:#e3b341; --c6:#f06595; --c7:#4fc3d4; --c8:#a0a7b4; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.4}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px;max-width:1500px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:end;justify-content:space-between;margin-bottom:24px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(26px,3.4vw,40px);letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:6px 0 0;max-width:62ch}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#q{font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);width:220px;max-width:100%}
+#q:focus-visible,.chip:focus-visible,a:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+.chip{font:500 12px var(--mono);padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.stats{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+
+.map{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 200px minmax(0,1fr);gap:28px 56px;align-items:start}
+svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+svg.links path{fill:none;stroke-width:1.6;opacity:.55}
+.col{display:flex;flex-direction:column;gap:22px;min-width:0;position:relative;z-index:1}
+.root{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;z-index:1;margin-top:120px;
+  background:var(--fg);color:var(--bg);border-radius:16px;padding:20px 18px;text-align:center}
+.root b{display:block;font:700 22px var(--display);letter-spacing:-.01em}
+.root span{font:12px var(--mono);opacity:.75}
+
+.proj{background:var(--surface);border:1px solid var(--soft);border-radius:12px;padding:14px 16px 12px;min-width:0}
+.proj h2{margin:0;display:flex;align-items:baseline;gap:10px;font:650 17px var(--display);letter-spacing:-.01em}
+.proj h2 .dot{width:10px;height:10px;border-radius:50%;background:var(--k);flex:none;transform:translateY(-1px)}
+.proj h2 .n{margin-left:auto;font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.proj .desc{color:var(--muted);font-size:13px;margin:2px 0 8px 20px}
+.grp{margin:8px 0 0 4px;padding-left:16px;border-left:1.5px solid color-mix(in srgb,var(--k) 45%,transparent)}
+.grp h3{margin:0 0 6px -16px;padding-left:10px;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--k);position:relative}
+.grp h3::before{content:"";position:absolute;left:0;top:50%;width:7px;border-top:1.5px solid color-mix(in srgb,var(--k) 45%,transparent)}
+.leaves{display:flex;flex-wrap:wrap;gap:6px}
+.leaf{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 10px;border-radius:7px;background:var(--soft);color:var(--fg);text-decoration:none;font-size:13px;border:1px solid transparent;transition:border-color .15s,background .15s}
+.leaf:hover{border-color:var(--k);background:color-mix(in srgb,var(--k) 10%,var(--surface))}
+.leaf .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leaf time{font:10.5px var(--mono);color:var(--muted);flex:none}
+.leaf.hot{box-shadow:inset 0 0 0 1.5px var(--k)}
+.empty{color:var(--muted);font-size:13px;padding:20px 0}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:28px;font:12px var(--mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;box-shadow:inset 0 0 0 1.5px var(--muted);margin-right:6px;vertical-align:-1px}
+
+@media (max-width:900px){
+  .map{grid-template-columns:minmax(0,1fr);gap:18px}
+  .root{position:static;margin-top:0;order:-1}
+  svg.links{display:none}
+  #q{width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Atlas des artifacts</h1>
+      <p class="sub">Les <span id="total">94</span> artifacts publiés depuis Claude Code, regroupés par projet puis par nature. Chaque pastille ouvre l'artifact.</p>
+    </div>
+    <div class="tools">
+      <input id="q" type="search" placeholder="Filtrer (ex. swap, audit, DS)" aria-label="Filtrer les artifacts">
+      <button class="chip" id="recent" aria-pressed="false">Modifiés en novembre</button>
+      <span class="stats" id="stats"></span>
+    </div>
+  </header>
+
+  <div class="map" id="map">
+    <svg class="links" id="links" aria-hidden="true"></svg>
+    <div class="col" id="left"></div>
+    <div class="root"><b>Louis · Claude Code</b><span id="rootn">94 artifacts</span></div>
+    <div class="col" id="right"></div>
+  </div>
+
+  <div class="legend"><span><i></i>contour = modifié dans les 7 derniers jours</span><span>dates au format JJ.MM (2026)</span></div>
+</div>
+
+<script>
+const A = id => "https://claude.ai/artifact/" + id;
+// [titre, id, date MM-DD]
+const P = [
+ {name:"Hyperbeat", k:"--c1", side:"L", desc:"App, money, vaults, swap, design systems et comm.", groups:[
+  ["Design systems",[["Hyperbeat DS 2.0","A4S58UgDUdvGZz7FfijDJz","11-18"],["Hyperbeat Blocks","9TwPGXDpk1upvfCFzor8tT","11-18"],["Hyperbeat Fintech DS","MitE2WaE58is1dpMY5y2QJ","11-17"],["Hyperbeat app, hbDS","Wu4M5hZFAQnS8duBU1gUm6","10-30"]]],
+  ["Prototypes & écrans",[["Hyperbeat Prototype","VeZvzc6PDjR83HMnMmGoi2","11-20"],["Hyperbeat Unified Home","JvPcTMWAE19GV2hkfP6nym","11-17"],["Hyperbeat Social Trading","WWfF82F5Ap44jPs6kVQ34U","10-29"],["Hyperbeat","9Gr5huPoDgfuN1sDWao3S5","10-14"]]],
+  ["Money",[["Hyperbeat Money V2","Qbm4wwiUuLEpUQM3ibipYk","11-11"],["Hyperbeat Money","VArjistiufJtD1hUzeSSdw","11-11"],["One Hyperbeat — unified money page","CgtmLiQKBU1UEZMB33pMAi","11-11"],["Money Motion Studies","Vbe2zPBeUXV8HxigKVEngU","11-11"]]],
+  ["Vaults & stake",[["Hyperbeat Vault Concepts","VBP6GESsH751Y9PFbBV3bs","11-09"],["Stake beHYPE — 6 essais","YXQiSYpHTdZYt5GvM123Cc","11-10"],["Stake — explorations","6u7Z7rHUXWCo4QF62874z7","11-09"]]],
+  ["Swap",[["Impact — Swap","NHpprHu6YQUxHy1NeKRt19","11-10"],["Recurring — Swap","FYLC2bNsLrRcLG1nsU6HVG","11-10"],["Route — Swap","By5qTPKhXcuanPk5j571o2","11-10"],["Ledger — Swap","JZx4dahbTeuK26F7JTRzTM","11-10"]]],
+  ["Communication",[["Notification posts","WbxJQVBu7EkACS62oSAFMW","11-09"],["Hyperbeat Post Cards","Votfu8fvDKLbVtWxqAgLt1","10-27"],["Post Card Layouts","FF7tTLVAf15Y7nJLbGBNao","10-27"],["Hyperbeat Communication","6bAPTfGTuJP3ADiu9ukGCz","10-16"],["COMM-697 — Send a card home","PEJf9fx3advtJdYPk7Td21","10-16"],["COMM-698 — Send money home","8qg4yg1LpyJj9Z3ZmPr5LU","10-14"],["Hyperbeat Launch Teaser","9wdsLccHDYydTHBDuj3NCT","10-15"]]],
+  ["Stratégie & audits",[["Brief agence — Liquid Banking","PKoAKNpLkp7giUjbBo3cpm","11-18"],["Phase 1 Research Review","GsDMUUTto2HquDj7PnLtj9","11-18"],["Hyperbeat Pro — Audit & Feature Map","4b4aNRxe6WpTVYWXbBipdA","10-15"]]]
+ ]},
+ {name:"Predict", k:"--c2", side:"R", desc:"Prediction markets : pages marché, feed, audits.", groups:[
+  ["Pages & système",[["Predict Market Pages v2","2xsoiWNaMRtPwCMusboUtq","11-16"],["Predict Market Pages","R9PnCRfHKCVoY4GLw459d7","11-16"],["Predict Highlight System","KoofRmgkNFiSFFi1n26VSU","11-16"],["Predict feed layouts","LRhPYSZPioNLpMKhhRtsGZ","11-05"]]],
+  ["Audits & recherche",[["Predict Market Audit","72PRJ1Qbeig1K72aqaWbSf","11-13"],["Market page audit","3fNU25EqF3HSiNSukKX958","11-12"],["Questions prediction markets","254VkRQet2UFN6846WCPj2","11-08"]]],
+  ["Explorations",[["Options × Prediction — 5 directions","G3AXd96C5tDCTpeW2o7oGw","10-28"],["polyield","JB5HcnqZhB8gnmaAXiJG19","11-18"]]]
+ ]},
+ {name:"Nimb", k:"--c3", side:"R", desc:"Agent sur marchés conditionnels : produit, cartes, audit.", groups:[
+  ["Produit",[["Nimb 1.2 — Read, Infer, Act","Cnt5dGNPWuwiQhzxrxpeNk","11-15"],["Nimb grid view","TGx7MwmbCDYCk5hjL9kPeX","11-16"],["Conditional Markets Agent Model","KEqVUAkZAMJocr4VzbpNh7","11-15"],["Nimb switches","2nphJ7McYhgAN8n8UH8nuK","11-07"]]],
+  ["Cartes partageables",[["Nimb PnL cards","Xaht8BVQmtoZ1wmBWLABXT","11-09"],["Nimb share cards","PwYe2Joqw2zHRubA6a4RpP","11-07"]]],
+  ["Audit & naming",[["Audit portfolio Nimb","VrhtdQT9mMcAwTSRs8kbdF","11-09"],["Nimb · audit complet et feuille de route","HRmcMenNXZEs4DMEETb3gg","11-07"],["Noms pour Nimb","BgJKgjoXhZV2V7eiyYxWr1","11-08"]]]
+ ]},
+ {name:"Trading desks & terminaux", k:"--c7", side:"L", desc:"Terminaux Hyperliquid, desks agents, data viz.", groups:[
+  ["Desks",[["Elite Trading Desk — 24/7 Brief","UQtUmkow8k6NpBviFGDwye","11-13"],["Desk Monitor — Agent Trading Desk","Btg6NsoJdjMQtgPufZhjZc","11-13"]]],
+  ["Terminaux",[["Node Trading Terminal","85WdPw5RTa8ji8bsgVsfBp","10-19"],["HL Live Terminal — 5 variantes","7af7W8p8xbyVSr6nnHQTZG","10-18"],["Open Interest Field","Qo7GBwLpNt1zysC7LLBrkW","11-06"],["Portfolio trials","PyD5zaFonTwvyP9Qyquamf","11-08"]]],
+  ["Social",[["24/7 Trading — Instagram series","TtriXsAQwHhQsx52rjshNG","10-19"]]]
+ ]},
+ {name:"Mainneat", k:"--c8", side:"R", desc:"Studio : identité, typo, terminal, portfolio.", groups:[
+  ["Identité & typo",[["Mainneat","T4rPhMiphxbueJDwPvTcnV","11-03"],["Mainneat Grotesk","ESyhjpwLkSCZiDqLDxNvCg","11-17"],["Mainneat page thumbnails","LkZd8Efkt4URMa4UhP5pvy","11-10"]]],
+  ["Terminal",[["Mainneat Swiss Terminal","FhP9eLt2ZVtBCnuTqm4ifh","11-17"],["Mainneat Trade et Portfolio","CgX9XRedhVjoW8obFHQzad","11-16"],["Mainneat terminal update","EozoU8FgT7j8iFUY1BCUBQ","10-27"]]],
+  ["Portfolio",[["Portfolio Louis","TqADHVccLbUKbyVgkzSiSp","10-27"]]]
+ ]},
+ {name:"Pascal", k:"--c4", side:"L", desc:"Suite de visualisations Pascal.", groups:[
+  ["Écrans",[["Pascal","5DmAsRa6pGwAKicyCutMXN","11-07"],["Pascal Lecture","LEoGMJZmCHYtAf7ELyQD4r","11-06"],["Pascal Lines","SKbJzSsqBfxjjpFKScn7fx","11-06"],["Pascal Holders","7u5ZmhYWeHnVKqzhZkzYus","11-07"],["Pascal Network","FZ7Yrb6kXuZ2a3z83uv5bC","11-06"],["Pascal Index","JqgzoNjbjfajf96vDERNEu","10-30"]]]
+ ]},
+ {name:"Murmur", k:"--c6", side:"R", desc:"Lancement, brand kit, intégration builders.", groups:[
+  ["Marque & lancement",[["Murmur","QurjYZ3c1EH7oxJ9b3pBSp","11-07"],["Murmur Brand Kit","8cDwTtYw3QEJUzAbjiVajv","11-07"],["Murmur Launch Review","FqA8ApHPEnmSc1D3CFYSjj","11-07"],["Builder Integration Guide","VwXaXdmnPyirjtb9MrYaaW","11-07"]]]
+ ]},
+ {name:"Monolith", k:"--c5", side:"L", desc:"Identité et produit Monolith.", groups:[
+  ["Identité & produit",[["Monolith Pro","PxvoZeh7RQCqiqaB435mew","11-04"],["Monolith (11.02)","7SZuBkoFBVv6AnvHP5z5NT","11-02"],["Monolith (v. alt)","RLa8dru44VbUJYVanWJp7D","11-02"],["Monolith — Identity explorations","4ib7q8Whd3MBm32w361SBc","11-02"]]]
+ ]},
+ {name:"Concepts fintech", k:"--c3", side:"L", desc:"Idées produit DeFi / paiement autonomes.", groups:[
+  ["Concepts",[["FLOAT — streaming payroll","Ng6K2p8GkMG1mVwMRvFvbu","11-10"],["Halo : liquidité autonome","KZwZQj1fWXWVGA4wMncFRM","11-11"],["IMD — what to build on top","TGQhzf9KKUemHebophtutX","11-10"],["unanimous floor","YaJKugaNnfWg7qp4ZSz14u","11-11"],["unanimous — design","RQc89oaMaJTB5yHK3C7MFQ","11-11"]]],
+  ["WTBWTS",[["WTBWTS — Brand, DS & Product","JZTXwNpLjphze6z9v3nBEj","11-03"],["WTBWTS — chat OTC","NrkogpargpHvK3F5x3ejYt","11-02"]]]
+ ]},
+ {name:"Structuration & juridique", k:"--c8", side:"R", desc:"Hunch, LLC, structuration Web3.", groups:[
+  ["Hunch",[["hunch — Vision","3fznRhwPwxEfPddZgMSjhH","10-26"],["Hunch — Plan de structuration","46kNAEELp2L9FJggzPJfjz","10-28"],["Hunch — Juridictions et cap table","9BbBWvBRVEX9ZKd1jAcQzS","10-28"]]],
+  ["Guides",[["Delaware LLC — guide complet","Tv4qRPrFGjuW9bK9dCqaNN","11-03"],["Atlas de structuration Web3","TBGTEtNcscK3Cdg6jnP3sC","11-02"]]]
+ ]},
+ {name:"Créatif & jeux", k:"--c6", side:"L", desc:"Typo, lettres, jeux, pièces libres.", groups:[
+  ["Typo & lettres",[["Cinq Lettres","Dkz1Dx9fuGYrbRF1TNmRKB","10-22"],["Fontes de la lettre","4mFAZ96iJYpwqZq8eEtGuh","10-22"],["La Colombe","2WBu7hsPpD1pfqqmJFCcue","10-22"]]],
+  ["Jeux & pièces",[["Knuckle Clash — Planches jeu","GhZUwtXJnzSk9ZW71BYEyL","10-17"],["Paper Shuffle","DmA9f76KdnEu1BsSB5LLKY","10-18"],["Alice's Ring","C6C7xBHa4CUiTa3mbXuRZC","11-04"],["Side A · Side B","BpTHPUXoL95fW6MoHxJQCk","11-04"]]]
+ ]}
+];
+
+const TODAY = new Date("2026-11-20");
+const isHot = d => (TODAY - new Date("2026-"+d)) / 864e5 <= 7;
+const fmt = d => d.slice(3)+"."+d.slice(0,2);
+const q = document.getElementById("q"), recentBtn = document.getElementById("recent");
+const L = document.getElementById("left"), R = document.getElementById("right");
+const total = P.reduce((s,p)=>s+p.groups.reduce((t,g)=>t+g[1].length,0),0);
+document.getElementById("total").textContent = total;
+document.getElementById("rootn").textContent = total + " artifacts · " + P.length + " projets";
+
+function render(){
+  const term = q.value.trim().toLowerCase(), onlyNov = recentBtn.getAttribute("aria-pressed")==="true";
+  L.innerHTML = ""; R.innerHTML = ""; let shown = 0;
+  P.forEach((p,i)=>{
+    const projHit = term && (p.name+" "+p.desc).toLowerCase().includes(term);
+    const groups = p.groups.map(([g,items])=>[g, items.filter(([t,,d])=>{
+      if(onlyNov && !d.startsWith("11")) return false;
+      if(!term || projHit) return true;
+      return (t+" "+g).toLowerCase().includes(term);
+    })]).filter(([,it])=>it.length);
+    const n = groups.reduce((s,g)=>s+g[1].length,0);
+    if(!n) return; shown += n;
+    const el = document.createElement("section");
+    el.className = "proj"; el.dataset.i = i; el.style.setProperty("--k", `var(${p.k})`);
+    el.innerHTML = `<h2><span class="dot"></span>${p.name}<span class="n">${n}</span></h2><p class="desc">${p.desc}</p>` +
+      groups.map(([g,items])=>`<div class="grp"><h3>${g}</h3><div class="leaves">${items.map(([t,id,d])=>
+        `<a class="leaf${isHot(d)?" hot":""}" href="${A(id)}" target="_blank" rel="noopener" title="${t}"><span class="t">${t}</span><time>${fmt(d)}</time></a>`).join("")}</div></div>`).join("");
+    (p.side==="L"?L:R).appendChild(el);
+  });
+  document.getElementById("stats").textContent = shown + " / " + total;
+  if(!shown){ L.innerHTML = '<p class="empty">Aucun artifact ne correspond à ce filtre.</p>'; }
+  requestAnimationFrame(draw);
+}
+
+function draw(){
+  const svg = document.getElementById("links"), map = document.getElementById("map");
+  const root = map.querySelector(".root");
+  if(getComputedStyle(svg).display==="none") return;
+  const mb = map.getBoundingClientRect(), rb = root.getBoundingClientRect();
+  svg.setAttribute("viewBox", `0 0 ${mb.width} ${mb.height}`);
+  const cy = rb.top - mb.top + rb.height/2;
+  svg.innerHTML = [...map.querySelectorAll(".proj")].map(el=>{
+    const b = el.getBoundingClientRect(), left = el.parentElement.id==="left";
+    const y = b.top - mb.top + 22;
+    const x1 = left ? rb.left - mb.left : rb.right - mb.left;
+    const x2 = left ? b.right - mb.left : b.left - mb.left;
+    const mx = (x1+x2)/2;
+    const col = getComputedStyle(el).getPropertyValue("--k") || "currentColor";
+    return `<path d="M${x1},${cy} C${mx},${cy} ${mx},${y} ${x2},${y}" stroke="${col}"/>`;
+  }).join("");
+}
+
+q.addEventListener("input", render);
+recentBtn.addEventListener("click", ()=>{ recentBtn.setAttribute("aria-pressed", recentBtn.getAttribute("aria-pressed")==="true"?"false":"true"); render(); });
+addEventListener("resize", ()=>requestAnimationFrame(draw));
+addEventListener("scroll", ()=>requestAnimationFrame(draw), {passive:true});
+document.fonts && document.fonts.ready.then(draw);
+render();
+</script>
