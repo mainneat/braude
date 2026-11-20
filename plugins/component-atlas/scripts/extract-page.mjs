@@ -266,9 +266,12 @@ export async function writeRawOutputs(dir, r, browser) {
   const first = Object.keys(groups)[0] ?? 'main';
   const candidates = r.candidates.map((c) => ({ ...c, styleGroup: groups[c.styleGroup] ? c.styleGroup : first }));
   let sheets = [];
-  if (candidates.length) {
+  // Les planches ne servent qu'à la classification : les measureOnly (jamais classés) en sont exclus ;
+  // les badges gardent l'index global de chaque candidat.
+  const rendered = candidates.filter((c) => !c.measureOnly);
+  if (rendered.length) {
     try {
-      const sheet = await renderContactSheet(candidates, { groups }, join(dir, 'contact.png'), browser);
+      const sheet = await renderContactSheet(rendered, { groups }, join(dir, 'contact.png'), browser);
       sheets = sheet.sheets;
       if (sheet.blank.length) {
         r.warnings.push(`Planche-contact : ${sheet.blank.length} tuile(s) vide(s) ou hors cadre (index ${sheet.blank.slice(0, 30).join(', ')}${sheet.blank.length > 30 ? '…' : ''})`);

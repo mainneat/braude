@@ -78,3 +78,20 @@ test('object-shaped type.families does not crash; file font becomes @font-face; 
   assert.ok(!r.styles.fontLinks.some((u) => /fonts\.googleapis/.test(u)));
   assert.ok(r.warnings.some((w) => /hors du projet/.test(w)));
 });
+
+test('contact sheets render only non-measureOnly candidates (global badge indexes)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atlas-ds-'));
+  try {
+    cpSync(fx('ds'), dir, { recursive: true });
+    execFileSync('node', [fileURLToPath(new URL('../scripts/extract-ds.mjs', import.meta.url)), dir], { encoding: 'utf8' });
+    const cands = JSON.parse(readFileSync(join(dir, 'candidates.json'), 'utf8'));
+    const sheets = JSON.parse(readFileSync(join(dir, 'contact.json'), 'utf8'));
+    const shown = cands.filter((c) => !c.measureOnly).map((c) => c.index);
+    assert.ok(cands.some((c) => c.measureOnly) && shown.length >= 2);
+    assert.equal(sheets.length, 1);
+    assert.equal(sheets[0].from, Math.min(...shown));
+    assert.equal(sheets[0].to, Math.max(...shown));
+    const lastMeasure = Math.max(...cands.filter((c) => c.measureOnly).map((c) => c.index));
+    assert.ok(sheets[0].to < lastMeasure || sheets[0].from > 0, 'range reflects rendered tiles only');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
