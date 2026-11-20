@@ -116,3 +116,11 @@ Proposé par Claude à partir des titres. Pour le compte de Louis, `projects.jso
 - Bibliothèque de visualisation de la galerie (SVG à la main ou bibliothèque UMD autorisée par la CSP).
 - Gestion des polices embarquées en data URI volumineuses (plafond, dédoublonnage).
 - Comportement si Playwright est absent en local (installation guidée ou message clair).
+
+## Amendement du 2026-11-20 — artifacts de type Design
+
+L'essai sur 3 artifacts a montré que les artifacts de type **Design** (canvas) contiennent l'essentiel du travail récent : « Hyperbeat Prototype » compte plus de 100 planches `project/*.dc.html`, dont des composants isolés (`c-trade-ticket`, `c-sidebar`…). Louis a choisi de les analyser aussi (ce n'est plus un non-objectif).
+
+- Chaque planche d'un artifact Design est rendue et passée au même détecteur qu'une page classique, avec les feuilles de style du projet. Le contexte d'un candidat commence par le titre de la planche.
+- Les candidats `measureOnly` (éléments mesurés à l'intérieur d'une tuile de Design System) reçoivent leur type par une règle automatique (balise, rôle, kind) et ne passent plus par la classification de Claude : un DS réel en produit des centaines.
+- Les autres types (Slides, Docs, Data, Whiteboard, Sheets) restent « non analysés ».

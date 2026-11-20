@@ -450,3 +450,22 @@ test('matrix cell click filters the by-type view', async () => { /* smoke Playwr
 - [ ] **Step 3:** Corriger ce que le run d'essai révèle (avec un test de non-régression dans la task concernée pour chaque bug de code).
 - [ ] **Step 4:** Run complet sur les 94 artifacts, publication de la galerie, puis un second run immédiat qui doit annoncer 0 artifact à retraiter et republier sur la même URL.
 - [ ] **Step 5: Commit** `feat(atlas): orchestration skill and first full run` puis push sur `claude/ecstatic-volta-ccyt0d`.
+
+---
+
+### Task 10: Artifacts de type Design + typage automatique des measureOnly
+
+(Ajoutée après l'essai réel ; voir l'amendement de la spec.)
+
+**Files:**
+- Create: `scripts/extract-design.mjs`, `tests/extract-design.test.mjs`, `tests/fixtures/design/project/...`
+- Modify: `scripts/lib/schema.mjs` (validateClassified n'exige que les index non-measureOnly), `scripts/build.mjs` (type automatique des measureOnly), `skills/component-atlas/SKILL.md` (kind `design`, lecture des fichiers, projection sans measureOnly)
+
+**Interfaces:**
+- Produces: `extractDesign(rawDir, opts?): Promise<{status,error?,warnings,styles,candidates}>` + CLI `node scripts/extract-design.mjs <rawDir>` (mêmes fichiers de sortie que les autres extracteurs) ; `autoType(candidate): TypeSlug` ; `validateClassified(data, candidates)` accepte désormais le tableau de candidats (ou un compte) et n'exige un item que pour les candidats non `measureOnly`.
+
+Comportement : le format `.dc.html` et `canvas.json` sont décrits dans `artifact-type/reference/format.md` de l'artifact Design (à lire via l'outil Artifact). Chaque planche est rendue dans Chromium avec ce dont elle dépend (CSS du projet, tokens du DS embarqué sous `project/ds/…`, polices), sans le runtime de l'éditeur si possible ; détection standard (pas `wholeBody`) ; `context` préfixé par le titre de la planche (depuis `canvas.json`, à défaut le nom de fichier) ; candidats de toutes les planches fusionnés, dédoublonnés par `componentKey`, index recalculés ; une seule feuille `styles` pour l'artifact. `meta.json.kind = 'design'`. Une planche qui échoue → warning, les autres continuent.
+
+- [ ] Tests : fixture Design minimale (2 planches + canvas.json + css partagé) → candidats des deux planches, contexte préfixé, dédoublonnage inter-planches, planche cassée → warning ; `autoType` (button→button, input text→input, role switch→toggle, segmented→segmented, svg→icon, card→card, nav→navigation, sinon other) ; validateClassified sans items measureOnly ; build type les measureOnly via autoType.
+- [ ] Implémentation, `npm test` vert, sanity check sur la copie réelle de « Hyperbeat Prototype ».
+- [ ] Commit `feat(atlas): extract Design canvas artifacts; auto-type measure-only candidates`
