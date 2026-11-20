@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import { loadJson, saveJson } from './lib/cache.mjs';
 import { componentKey } from './lib/hash.mjs';
 import { validateClassified } from './lib/schema.mjs';
 import { TAXONOMY } from './lib/taxonomy.mjs';
+import { bundleScripts } from './lib/inline.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.join(HERE, '..', 'seed', 'projects.louis.json');
@@ -143,11 +145,22 @@ export async function buildData({ dir, now }) {
   return data;
 }
 
-/** Hook for Task 7: inlines the gallery into dist/index.html. No-op if the template is absent. */
+const GALLERY = path.join(HERE, '..', 'gallery');
+const GALLERY_MODULES = ['tile', 'logic', 'views', 'main'];
+
+/** Galerie autonome : le gabarit avec les modules de gallery/src inlinés à la place de <!--APP-->. */
+export function inlineGallery() {
+  const tpl = readFileSync(path.join(GALLERY, 'index.template.html'), 'utf8');
+  if (!tpl.includes('<!--APP-->')) throw new Error('index.template.html : marqueur <!--APP--> absent');
+  const js = bundleScripts(GALLERY_MODULES.map((m) => readFileSync(path.join(GALLERY, 'src', `${m}.mjs`), 'utf8')));
+  return tpl.replace('<!--APP-->', () => `<script>\n${js}\n</script>`);
+}
+
+/** Écrit dist/index.html (la galerie à publier avec dist/data.json). */
 export async function writeGallery(distDir) {
-  const tpl = path.join(HERE, '..', 'gallery', 'index.template.html');
-  try { await fs.access(tpl); } catch { return false; }
-  return false; // Task 7 provides the inlining
+  await fs.mkdir(distDir, { recursive: true });
+  await fs.writeFile(path.join(distDir, 'index.html'), inlineGallery());
+  return true;
 }
 
 async function main() {

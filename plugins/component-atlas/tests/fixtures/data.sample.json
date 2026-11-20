@@ -1,0 +1,965 @@
+{
+ "generatedAt": "2026-11-20T08:30:00.000Z",
+ "taxonomy": [
+  {
+   "slug": "button",
+   "label": "Button"
+  },
+  {
+   "slug": "icon-button",
+   "label": "Icon button"
+  },
+  {
+   "slug": "toggle",
+   "label": "Toggle / switch"
+  },
+  {
+   "slug": "segmented",
+   "label": "Segmented control / tabs"
+  },
+  {
+   "slug": "checkbox-radio",
+   "label": "Checkbox / radio"
+  },
+  {
+   "slug": "input",
+   "label": "Input / search"
+  },
+  {
+   "slug": "select",
+   "label": "Select / dropdown"
+  },
+  {
+   "slug": "slider",
+   "label": "Slider"
+  },
+  {
+   "slug": "card",
+   "label": "Card"
+  },
+  {
+   "slug": "chip",
+   "label": "Chip / tag / badge"
+  },
+  {
+   "slug": "avatar",
+   "label": "Avatar"
+  },
+  {
+   "slug": "icon",
+   "label": "Icon"
+  },
+  {
+   "slug": "navigation",
+   "label": "Navigation"
+  },
+  {
+   "slug": "list-item",
+   "label": "List item / row"
+  },
+  {
+   "slug": "overlay",
+   "label": "Modal / sheet / popover"
+  },
+  {
+   "slug": "toast",
+   "label": "Toast / banner"
+  },
+  {
+   "slug": "chart",
+   "label": "Chart / data viz"
+  },
+  {
+   "slug": "other",
+   "label": "Autre"
+  }
+ ],
+ "artifacts": [
+  {
+   "id": "nimbBasic01",
+   "url": "https://claude.ai/artifact/nimbBasic01",
+   "title": "Nimbus — écran réglages",
+   "updated": "2026-11-18T10:00:00Z",
+   "project": "Nimbus",
+   "kind": "page",
+   "status": "ok",
+   "componentCount": 8,
+   "warnings": []
+  },
+  {
+   "id": "nimbTokens02",
+   "url": "https://claude.ai/artifact/nimbTokens02",
+   "title": "Nimbus — jetons sombres",
+   "updated": "2026-11-12T09:00:00Z",
+   "project": "Nimbus",
+   "kind": "page",
+   "status": "ok",
+   "componentCount": 1,
+   "warnings": []
+  },
+  {
+   "id": "slidesX06",
+   "url": "https://claude.ai/artifact/slidesX06",
+   "title": "Présentation trimestrielle",
+   "updated": "2026-11-05T09:00:00Z",
+   "project": "Sans projet",
+   "kind": "other-type",
+   "status": "skipped",
+   "componentCount": 0,
+   "warnings": [],
+   "note": "Type Slides non analysé"
+  },
+  {
+   "id": "atelierDS05",
+   "url": "https://claude.ai/artifact/atelierDS05",
+   "title": "Atelier Design System",
+   "updated": "2026-11-01T09:00:00Z",
+   "project": "Atelier",
+   "kind": "design-system",
+   "status": "ok",
+   "componentCount": 4,
+   "warnings": []
+  },
+  {
+   "id": "lumenTags03",
+   "url": "https://claude.ai/artifact/lumenTags03",
+   "title": "Lumen — étiquettes",
+   "updated": "2026-10-02T09:00:00Z",
+   "project": "Lumen",
+   "kind": "page",
+   "status": "ok",
+   "componentCount": 1,
+   "warnings": []
+  },
+  {
+   "id": "lumenSeg04",
+   "url": "https://claude.ai/artifact/lumenSeg04",
+   "title": "Lumen — sélecteur de période",
+   "updated": "2026-09-15T09:00:00Z",
+   "project": "Lumen",
+   "kind": "page",
+   "status": "ok",
+   "componentCount": 2,
+   "warnings": []
+  },
+  {
+   "id": "brokenY07",
+   "url": "https://claude.ai/artifact/brokenY07",
+   "title": "Prototype cassé",
+   "updated": "2026-08-20T09:00:00Z",
+   "project": "Sans projet",
+   "kind": "page",
+   "status": "error",
+   "componentCount": 0,
+   "warnings": [],
+   "note": "Chargement : net::ERR_NAME_NOT_RESOLVED"
+  }
+ ],
+ "styles": {
+  "nimbBasic01": {
+   "cssLight": ":host{--ink: #1d1d1f; --accent: #2f6bff; --surface: #f4f4f6;}.ca-body{margin: 0px; font-family: AtlasTest, system-ui, sans-serif; color: var(--ink); background: rgb(255, 255, 255);}nav.top{display: flex; gap: 12px; padding: 12px 24px; border-bottom: 1px solid rgb(221, 221, 221);}nav.top a{color: var(--ink); text-decoration: none;}main{padding: 24px;}.btn{padding: 8px 16px; border-radius: 8px; border: 0px; background: var(--accent); color: rgb(255, 255, 255); font-size: 14px;}.btn.ghost{background: transparent; color: var(--accent); border: 1px solid var(--accent);}.card{width: 320px; padding: 16px; margin: 24px 0px; border-radius: 12px; background: var(--surface); box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 3px;}.card h3{margin: 0px 0px 8px;}.switch{display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: rgb(204, 204, 204);}.icons svg{width: 20px; height: 20px; margin-right: 8px;}",
+   "cssDark": ":host{--ink: #1d1d1f; --accent: #2f6bff; --surface: #f4f4f6;}.ca-body{margin: 0px; font-family: AtlasTest, system-ui, sans-serif; color: var(--ink); background: rgb(255, 255, 255);}nav.top{display: flex; gap: 12px; padding: 12px 24px; border-bottom: 1px solid rgb(221, 221, 221);}nav.top a{color: var(--ink); text-decoration: none;}main{padding: 24px;}.btn{padding: 8px 16px; border-radius: 8px; border: 0px; background: var(--accent); color: rgb(255, 255, 255); font-size: 14px;}.btn.ghost{background: transparent; color: var(--accent); border: 1px solid var(--accent);}.card{width: 320px; padding: 16px; margin: 24px 0px; border-radius: 12px; background: var(--surface); box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 3px;}.card h3{margin: 0px 0px 8px;}.switch{display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: rgb(204, 204, 204);}.icons svg{width: 20px; height: 20px; margin-right: 8px;}",
+   "fontLinks": [],
+   "fontIds": [
+    "7cbe55bd21d96b25b4c815c76905ef50a1785a5d"
+   ]
+  },
+  "nimbTokens02": {
+   "cssLight": ":host{--bg: #ffffff; --fg: #111111; --btn: #2f6bff; --btn-fg: #ffffff;}:host([data-theme=\"dark\"]){--bg: #121212; --fg: #eeeeee; --btn: #8ab4ff; --btn-fg: #0b1020;}:host, .ca-body{margin: 0px;}.ca-body{background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; padding: 32px;}.ca-body .panel .primary{background: var(--btn); color: var(--btn-fg); border: 0px; border-radius: 6px; padding: 8px 14px;}",
+   "cssDark": ":host{--bg: #ffffff; --fg: #111111; --btn: #2f6bff; --btn-fg: #ffffff;}:host(:not([data-theme=\"light\"])){--bg: #121212; --fg: #eeeeee; --btn: #8ab4ff; --btn-fg: #0b1020;}:host([data-theme=\"dark\"]){--bg: #121212; --fg: #eeeeee; --btn: #8ab4ff; --btn-fg: #0b1020;}:host, .ca-body{margin: 0px;}.ca-body{background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; padding: 32px;}.ca-body .panel .primary{background: var(--btn); color: var(--btn-fg); border: 0px; border-radius: 6px; padding: 8px 14px;}",
+   "fontLinks": [],
+   "fontIds": []
+  },
+  "atelierDS05": {
+   "cssLight": ":host{--brand: #2f6bff; --surface: #ffffff; --radius-md: 8px;}[data-theme=\"dark\"]{--surface: #111111;}.ca-body{margin: 0px; font-family: system-ui, sans-serif; background: var(--surface);}.fx-btn{padding: 8px 16px; border: 0px; border-radius: var(--radius-md); background: var(--brand); color: rgb(255, 255, 255); font-size: 14px;}.fx-toggle{display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: rgb(204, 204, 204);}",
+   "cssDark": ":host{--brand: #2f6bff; --surface: #ffffff; --radius-md: 8px;}[data-theme=\"dark\"]{--surface: #111111;}:host(:not([data-theme=\"light\"])){--surface: #111111;}.ca-body{margin: 0px; font-family: system-ui, sans-serif; background: var(--surface);}.fx-btn{padding: 8px 16px; border: 0px; border-radius: var(--radius-md); background: var(--brand); color: rgb(255, 255, 255); font-size: 14px;}.fx-toggle{display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: rgb(204, 204, 204);}",
+   "fontLinks": [],
+   "fontIds": []
+  },
+  "lumenTags03": {
+   "cssLight": ".ca-body{margin: 0px; padding: 16px; font-family: system-ui, sans-serif;}.grid{display: flex; flex-wrap: wrap; gap: 4px;}.chip{padding: 2px 8px; border-radius: 999px; border: 1px solid rgb(170, 170, 170); background: rgb(250, 250, 250); font-size: 12px;}.chip.other{background: rgb(34, 34, 34); color: rgb(255, 255, 255);}",
+   "cssDark": ".ca-body{margin: 0px; padding: 16px; font-family: system-ui, sans-serif;}.grid{display: flex; flex-wrap: wrap; gap: 4px;}.chip{padding: 2px 8px; border-radius: 999px; border: 1px solid rgb(170, 170, 170); background: rgb(250, 250, 250); font-size: 12px;}.chip.other{background: rgb(34, 34, 34); color: rgb(255, 255, 255);}",
+   "fontLinks": [],
+   "fontIds": []
+  },
+  "lumenSeg04": {
+   "cssLight": ".ca-body{margin: 0px; padding: 40px; font-family: system-ui, sans-serif; background: rgb(240, 240, 243);}.demo > span{display: block; font-size: 11px; color: rgb(119, 119, 119);}.demo .seg{position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: rgb(226, 226, 232);}.demo .seg button{position: relative; z-index: 1; border: 0px; background: transparent; padding: 6px 14px; font: inherit; color: rgb(51, 51, 51);}.demo .seg .ind{position: absolute; top: 3px; bottom: 3px; left: 3px; width: 33%; border-radius: 8px; background: rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 2px;}#app .pill{display: inline-flex; gap: 4px;}#app .pill .dot{display: inline-block; width: 6px; height: 6px; background: rgb(255, 0, 0);}",
+   "cssDark": ".ca-body{margin: 0px; padding: 40px; font-family: system-ui, sans-serif; background: rgb(240, 240, 243);}.demo > span{display: block; font-size: 11px; color: rgb(119, 119, 119);}.demo .seg{position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: rgb(226, 226, 232);}.demo .seg button{position: relative; z-index: 1; border: 0px; background: transparent; padding: 6px 14px; font: inherit; color: rgb(51, 51, 51);}.demo .seg .ind{position: absolute; top: 3px; bottom: 3px; left: 3px; width: 33%; border-radius: 8px; background: rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 2px;}#app .pill{display: inline-flex; gap: 4px;}#app .pill .dot{display: inline-block; width: 6px; height: 6px; background: rgb(255, 0, 0);}",
+   "fontLinks": [],
+   "fontIds": []
+  }
+ },
+ "fonts": {
+  "7cbe55bd21d96b25b4c815c76905ef50a1785a5d": "@font-face { font-family: AtlasTest; src: url(\"data:font/woff2;base64,d09GMgABAAAAAAAA\") format(\"woff2\"); }"
+ },
+ "components": [
+  {
+   "key": "8a162db0e7198f8643ea8d62a0e8acb9f056f5c3",
+   "type": "navigation",
+   "name": "Barre de navigation",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><nav class=\"top\"><a href=\"#a\">Accueil</a><a href=\"#b\">Projets</a><a href=\"#c\">Contact</a></nav></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 45,
+     "paddingX": 24,
+     "paddingY": 12
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 45,
+     "paddingX": 24,
+     "paddingY": 12
+    }
+   },
+   "colors": [
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "813498ba44638353d3711ed8813f838d74ac9ef6",
+   "type": "button",
+   "name": "Bouton principal",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"actions\"><button class=\"btn\">Enregistrer</button></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": "#2f6bff",
+     "fg": "#ffffff",
+     "border": null,
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 100,
+     "height": 32,
+     "paddingX": 16,
+     "paddingY": 8
+    },
+    "dark": {
+     "bg": "#2f6bff",
+     "fg": "#ffffff",
+     "border": null,
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 100,
+     "height": 32,
+     "paddingX": 16,
+     "paddingY": 8
+    }
+   },
+   "colors": [
+    "#2f6bff",
+    "#ffffff"
+   ]
+  },
+  {
+   "key": "48285ab677136b2c0457b35efa736c0e332bbc72",
+   "type": "button",
+   "name": "Bouton secondaire",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"actions\"><button class=\"btn ghost\">Annuler</button></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#2f6bff",
+     "border": "#2f6bff",
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 82,
+     "height": 34,
+     "paddingX": 16,
+     "paddingY": 8
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#2f6bff",
+     "border": "#2f6bff",
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 82,
+     "height": 34,
+     "paddingX": 16,
+     "paddingY": 8
+    }
+   },
+   "colors": [
+    "#2f6bff"
+   ]
+  },
+  {
+   "key": "635090e3ef6e6d70f6b3de3e779250027237373d",
+   "type": "card",
+   "name": "Carte",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"card\"><h3>Titre de carte</h3><p>Un texte de description assez long.</p></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": "#f4f4f6",
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 12,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 352,
+     "height": 107,
+     "paddingX": 16,
+     "paddingY": 16
+    },
+    "dark": {
+     "bg": "#f4f4f6",
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 12,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 352,
+     "height": 107,
+     "paddingX": 16,
+     "paddingY": 16
+    }
+   },
+   "colors": [
+    "#f4f4f6",
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "6988701f7f7723adbcca39dc61c6faec21e9d413",
+   "type": "toggle",
+   "name": "Interrupteur",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div role=\"switch\" aria-checked=\"true\" class=\"switch\" tabindex=\"0\"></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": "#cccccc",
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 11,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 40,
+     "height": 22,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": "#cccccc",
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 11,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 40,
+     "height": 22,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#cccccc",
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "b46de05b80c26a7d3e8d4760f0c1af12d00d4361",
+   "type": "icon",
+   "name": "Cercle",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"icons\"><svg viewBox=\"0 0 20 20\"><circle cx=\"10\" cy=\"10\" r=\"8\" fill=\"currentColor\"></circle></svg></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "137b8d7608210265cc469fe3bd08a27d2ecdfd72",
+   "type": "icon",
+   "name": "Carré",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"icons\"><svg viewBox=\"0 0 20 20\"><rect x=\"2\" y=\"2\" width=\"16\" height=\"16\" fill=\"currentColor\"></rect></svg></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "1ccfbc7c19a3dfb835926872ac8c313d045d699b",
+   "type": "icon",
+   "name": "Triangle",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbBasic01",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbBasic01",
+   "html": "<div class=\"ca-body page\"><main><div class=\"icons\"><svg viewBox=\"0 0 20 20\"><path d=\"M2 18 L10 2 L18 18 Z\" fill=\"currentColor\"></path></svg></div></main></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#1d1d1f",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "AtlasTest, system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 20,
+     "height": 20,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#1d1d1f"
+   ]
+  },
+  {
+   "key": "c4e01d263d5f6c11182a5125df05048d18b864be",
+   "type": "button",
+   "name": "Valider",
+   "project": "Nimbus",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "nimbTokens02",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "nimbTokens02",
+   "html": "<div class=\"ca-body\"><section class=\"panel\"><button class=\"primary\">Valider</button></section></div>",
+   "metrics": {
+    "light": {
+     "bg": "#2f6bff",
+     "fg": "#ffffff",
+     "border": null,
+     "radius": 6,
+     "fontFamily": "Arial",
+     "fontSize": 13.33,
+     "fontWeight": 400,
+     "width": 69,
+     "height": 31,
+     "paddingX": 14,
+     "paddingY": 8
+    },
+    "dark": {
+     "bg": "#8ab4ff",
+     "fg": "#0b1020",
+     "border": null,
+     "radius": 6,
+     "fontFamily": "Arial",
+     "fontSize": 13.33,
+     "fontWeight": 400,
+     "width": 69,
+     "height": 31,
+     "paddingX": 14,
+     "paddingY": 8
+    }
+   },
+   "colors": [
+    "#2f6bff",
+    "#ffffff",
+    "#8ab4ff",
+    "#0b1020"
+   ]
+  },
+  {
+   "key": "1025abf3503efe6f804b5c55295c336ae88e04b7",
+   "type": "button",
+   "name": "Button",
+   "project": "Atelier",
+   "isDS": true,
+   "sources": [
+    {
+     "artifactId": "atelierDS05",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "atelierDS05",
+   "html": "<div class=\"ca-body\">\n\n<div style=\"padding:16px\"><button class=\"fx-btn\">Save</button></div>\n</div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 64,
+     "paddingX": 16,
+     "paddingY": 16
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 64,
+     "paddingX": 16,
+     "paddingY": 16
+    }
+   },
+   "colors": [
+    "#000000"
+   ],
+   "description": "Primary action button."
+  },
+  {
+   "key": "b52c5c1e8741cd24535f9fa32d3d600922f0027c",
+   "type": "button",
+   "name": "Save",
+   "project": "Atelier",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "atelierDS05",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "atelierDS05",
+   "html": "<div class=\"ca-body\"><div style=\"padding:16px\"><button class=\"fx-btn\">Save</button></div></div>",
+   "metrics": {
+    "light": {
+     "bg": "#2f6bff",
+     "fg": "#ffffff",
+     "border": null,
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 64,
+     "height": 32,
+     "paddingX": 16,
+     "paddingY": 8
+    },
+    "dark": {
+     "bg": "#2f6bff",
+     "fg": "#ffffff",
+     "border": null,
+     "radius": 8,
+     "fontFamily": "Arial",
+     "fontSize": 14,
+     "fontWeight": 400,
+     "width": 64,
+     "height": 32,
+     "paddingX": 16,
+     "paddingY": 8
+    }
+   },
+   "colors": [
+    "#2f6bff",
+    "#ffffff"
+   ],
+   "measureOnly": true
+  },
+  {
+   "key": "3a1c7bda3c5fe549559b1e732a9bd19d89de8765",
+   "type": "toggle",
+   "name": "Toggle",
+   "project": "Atelier",
+   "isDS": true,
+   "sources": [
+    {
+     "artifactId": "atelierDS05",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "atelierDS05",
+   "html": "<div class=\"ca-body\">\n<div style=\"padding:16px\"><span class=\"fx-toggle\" role=\"switch\" aria-checked=\"false\"></span></div>\n</div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 58,
+     "paddingX": 16,
+     "paddingY": 16
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 1280,
+     "height": 58,
+     "paddingX": 16,
+     "paddingY": 16
+    }
+   },
+   "colors": [
+    "#000000"
+   ],
+   "description": "A two-state switch for settings."
+  },
+  {
+   "key": "c2a1e428aaeb42807d4b9637850e250634559ec5",
+   "type": "toggle",
+   "name": "Thumb",
+   "project": "Atelier",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "atelierDS05",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "atelierDS05",
+   "html": "<div class=\"ca-body\"><div style=\"padding:16px\"><span class=\"fx-toggle\" role=\"switch\" aria-checked=\"false\"></span></div></div>",
+   "metrics": {
+    "light": {
+     "bg": "#cccccc",
+     "fg": "#000000",
+     "border": null,
+     "radius": 11,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 40,
+     "height": 22,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": "#cccccc",
+     "fg": "#000000",
+     "border": null,
+     "radius": 11,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 40,
+     "height": 22,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#cccccc",
+    "#000000"
+   ],
+   "measureOnly": true
+  },
+  {
+   "key": "e9d25216af2df999f67fa4dca4a2279df966a2b7",
+   "type": "chip",
+   "name": "Étiquette",
+   "project": "Lumen",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "lumenTags03",
+     "occurrences": 300
+    }
+   ],
+   "occurrences": 300,
+   "artifactId": "lumenTags03",
+   "html": "<div class=\"ca-body\"><div class=\"grid\"><button class=\"chip\">Tag</button></div></div>",
+   "metrics": {
+    "light": {
+     "bg": "#fafafa",
+     "fg": "#000000",
+     "border": "#aaaaaa",
+     "radius": 999,
+     "fontFamily": "Arial",
+     "fontSize": 12,
+     "fontWeight": 400,
+     "width": 37,
+     "height": 20,
+     "paddingX": 8,
+     "paddingY": 2
+    },
+    "dark": {
+     "bg": "#fafafa",
+     "fg": "#000000",
+     "border": "#aaaaaa",
+     "radius": 999,
+     "fontFamily": "Arial",
+     "fontSize": 12,
+     "fontWeight": 400,
+     "width": 37,
+     "height": 20,
+     "paddingX": 8,
+     "paddingY": 2
+    }
+   },
+   "colors": [
+    "#fafafa",
+    "#000000",
+    "#aaaaaa"
+   ]
+  },
+  {
+   "key": "37c5fe214763a7ea7d351433aef22bb920a4b614",
+   "type": "segmented",
+   "name": "Période",
+   "project": "Lumen",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "lumenSeg04",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "lumenSeg04",
+   "html": "<div class=\"ca-body\"><section aria-labelledby=\"v1\"><div class=\"demo\" id=\"root\"><div class=\"seg\"><span class=\"ind\"></span><button>Jour</button><button>Semaine</button><button>Mois</button></div></div></section></div>",
+   "metrics": {
+    "light": {
+     "bg": "#e2e2e8",
+     "fg": "#000000",
+     "border": null,
+     "radius": 10,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 226,
+     "height": 38,
+     "paddingX": 3,
+     "paddingY": 3
+    },
+    "dark": {
+     "bg": "#e2e2e8",
+     "fg": "#000000",
+     "border": null,
+     "radius": 10,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 226,
+     "height": 38,
+     "paddingX": 3,
+     "paddingY": 3
+    }
+   },
+   "colors": [
+    "#e2e2e8",
+    "#000000"
+   ]
+  },
+  {
+   "key": "3ac423f73bc05398d14032f2d9a53e1dd8d3de22",
+   "type": "segmented",
+   "name": "A / B",
+   "project": "Lumen",
+   "isDS": false,
+   "sources": [
+    {
+     "artifactId": "lumenSeg04",
+     "occurrences": 1
+    }
+   ],
+   "occurrences": 1,
+   "artifactId": "lumenSeg04",
+   "html": "<div class=\"ca-body\"><section id=\"app\"><div class=\"pill\" id=\"pill\"><span class=\"dot\"></span><span class=\"dot\"></span><button>A</button><button>B</button></div></section></div>",
+   "metrics": {
+    "light": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 74,
+     "height": 21,
+     "paddingX": 0,
+     "paddingY": 0
+    },
+    "dark": {
+     "bg": null,
+     "fg": "#000000",
+     "border": null,
+     "radius": 0,
+     "fontFamily": "system-ui, sans-serif",
+     "fontSize": 16,
+     "fontWeight": 400,
+     "width": 74,
+     "height": 21,
+     "paddingX": 0,
+     "paddingY": 0
+    }
+   },
+   "colors": [
+    "#000000"
+   ]
+  }
+ ],
+ "notes": []
+}
