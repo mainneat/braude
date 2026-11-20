@@ -24,12 +24,69 @@ function splitTop(str, sepTest) {
 
 const IDENT_CONT = /[\w-]/;
 
+const FUNCTIONAL = /^:(is|where|not|has)\(/;
+const PSEUDO_EL = /^(::|:(before|after|first-line|first-letter)(?![\w-]))/;
+
+// Réécrit récursivement les arguments de :is()/:where()/:not()/:has().
+// Limite assumée : à l'intérieur, html/:root deviennent `:host` même si ce
+// n'est pas valide dans toutes les positions (le résultat peut ne rien matcher).
+function scopeFunctional(comp) {
+  let out = '', depth = 0, quote = null;
+  for (let i = 0; i < comp.length; i++) {
+    const c = comp[i];
+    if (quote) {
+      out += c;
+      if (c === '\\') out += comp[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { quote = c; out += c; continue; }
+    if (c === '\\') { out += c + (comp[++i] ?? ''); continue; }
+    if (c === '[') depth++;
+    else if (c === ']') depth--;
+    const m = depth === 0 && c === ':' ? FUNCTIONAL.exec(comp.slice(i)) : null;
+    if (m) {
+      const start = i + m[0].length;
+      let d = 1, j = start, q = null;
+      for (; j < comp.length && d > 0; j++) {
+        const ch = comp[j];
+        if (q) { if (ch === '\\') j++; else if (ch === q) q = null; continue; }
+        if (ch === '"' || ch === "'") q = ch;
+        else if (ch === '\\') j++;
+        else if (ch === '(') d++;
+        else if (ch === ')') d--;
+      }
+      const inner = comp.slice(start, d === 0 ? j - 1 : j);
+      out += m[0] + scopeSelector(inner) + (d === 0 ? ')' : '');
+      i = j - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+function splitPseudoElement(rest) {
+  let depth = 0, quote = null;
+  for (let i = 0; i < rest.length; i++) {
+    const c = rest[i];
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (c === ':' && depth === 0 && PSEUDO_EL.test(rest.slice(i))) return [rest.slice(0, i), rest.slice(i)];
+  }
+  return [rest, ''];
+}
+
 function scopeCompound(comp) {
-  const m = /^(html|:root|body)(?![\w-])/.exec(comp);
+  comp = scopeFunctional(comp);
+  const m = /^(html|:root|body)(?![\w\\-])/.exec(comp);
   if (!m) return comp;
   const rest = comp.slice(m[1].length);
   if (m[1] === 'body') return '.ca-body' + rest;
-  return rest ? `:host(${rest})` : ':host';
+  const [pre, pseudo] = splitPseudoElement(rest);
+  return (pre ? `:host(${pre})` : ':host') + pseudo;
 }
 
 export function scopeSelector(sel) {

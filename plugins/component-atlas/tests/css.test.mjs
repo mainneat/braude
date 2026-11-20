@@ -50,3 +50,19 @@ test('tokensToCss aliases, plain strings, ignored type', () => {
   assert.match(dark, /--b:#000/);
   assert.doesNotMatch(dark, /--c:/);
 });
+test('scopeSelector pseudo-elements', () => {
+  assert.equal(scopeSelector(':root::before'), ':host::before');
+  assert.equal(scopeSelector('html.dark::after'), ':host(.dark)::after');
+  assert.equal(scopeSelector(':root:before'), ':host:before');
+  assert.equal(scopeSelector('body::before'), '.ca-body::before');
+  assert.equal(scopeSelector(':root[data-x="::a"]'), ':host([data-x="::a"])');
+});
+test('scopeSelector functional pseudo-classes', () => {
+  assert.equal(scopeSelector(':is(html) .x'), ':is(:host) .x');
+  assert.equal(scopeSelector(':where(body) .x'), ':where(.ca-body) .x');
+  assert.equal(scopeSelector('div:not(body)'), 'div:not(.ca-body)');
+  assert.equal(scopeSelector('a:is(:root, body)'), 'a:is(:host, .ca-body)');
+  assert.equal(scopeSelector('.x:has(> body)'), '.x:has(> .ca-body)');
+  assert.equal(scopeSelector(':root:not([data-theme="light"])'), ':host(:not([data-theme="light"]))');
+  assert.equal(scopeSelector('body\\:x'), 'body\\:x');
+});
